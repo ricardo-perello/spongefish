@@ -9,6 +9,9 @@ use sha2::{Digest, Sha512};
 use crate::VerifierState;
 use crate::{DuplexSpongeInterface, Encoding, ProverState, StdHash};
 
+/// Sponge / compilation info for [`domain_separator!`] when no explicit `sponge_info` is supplied.
+pub const DOMAIN_SEPARATOR_MACRO_SPONGE_INFO: &[u8] = b"spongefish/domain_separator/macro/v1";
+
 /// Marker structure for domain separators without an associated instance.
 ///
 /// The Fiat--Shamir transformation requires an instance to provide a sound non-interactive proof.
@@ -41,33 +44,14 @@ impl<I: ?Sized> WithoutInstance<I> {
 pub struct WithInstance<'i, I: ?Sized>(&'i I);
 
 /// Domain separator for a Fiat--Shamir transformation.
-pub struct DomainSeparator<I, S = [u8; 64]> {
-    /// **what** this interactive protocol is — or, if [`Self::derived`] is true, the 64-byte digest
-    /// from [`DomainSeparator::derive`].
-    pub protocol: [u8; 64],
-    // **where** this interactive protocol is being used.
-    pub session: Option<S>,
-    /// **how** this interactive protocol is used.
+///
+/// Built only via [`DomainSeparator::derive`]: `domsep` is a 64-byte SHA-512 digest over
+/// length-prefixed `(protocol_id, sponge_info, session)`, then the instance is absorbed
+/// separately (duplex or `StdHash` bootstrap).
+pub struct DomainSeparator<I> {
+    /// 64-byte domain tag (SHA-512 over the triple); feeds `StdHash::from_protocol_id` / duplex init.
+    pub domsep: [u8; 64],
     instance: I,
-    /// When `true`, [`Self::protocol`] is a SHA-512 digest over length-prefixed
-    /// `(protocol_id, sponge_info, session)`; the transcript absorbs only this block and the
-    /// instance (no separate session absorb).
-    pub derived: bool,
-}
-
-impl<I: ?Sized, S> DomainSeparator<WithoutInstance<I>, S> {
-    #[must_use]
-    #[deprecated(
-        note = "prefer DomainSeparator::derive(protocol_id, sponge_info, session) for injective domain separation; this constructor keeps the legacy padded-64-byte layout"
-    )]
-    pub const fn new(protocol: [u8; 64]) -> Self {
-        Self {
-            protocol,
-            session: None,
-            instance: WithoutInstance::new(),
-            derived: false,
-        }
-    }
 }
 
 /// Length-prefixed SHA-512 domain derivation: `LE32(|p|)||p||LE32(|i|)||i||LE32(|s|)||s`.
@@ -86,20 +70,31 @@ pub fn derive_domain_digest(
     hasher.finalize().into()
 }
 
+/// Raw UTF-8 / formatted bytes for a protocol label (unpadded), for use with [`DomainSeparator::derive`].
+#[must_use]
+pub fn protocol_label(args: Arguments) -> alloc::vec::Vec<u8> {
+    if let Some(message) = args.as_str() {
+        return message.as_bytes().to_vec();
+    }
+    alloc::fmt::format(args).into_bytes()
+}
+
 #[cfg(feature = "sha2")]
-impl<I: ?Sized> DomainSeparator<WithoutInstance<I>, [u8; 64]> {
-    /// Builds a domain separator from explicit protocol bytes, compilation/sponge info, and
-    /// session bytes using SHA-512 over a length-prefixed injective encoding.
-    ///
-    /// The resulting transcript initialization absorbs only this 64-byte digest and the instance
-    /// (no separate session field on the wire).
+impl<I: ?Sized> DomainSeparator<WithoutInstance<I>> {
+    /// Domain separation from explicit protocol bytes, compilation/sponge info, and session bytes
+    /// (SHA-512 over a length-prefixed injective encoding).
     #[must_use]
     pub fn derive(protocol_id: &[u8], sponge_info: &[u8], session: &[u8]) -> Self {
         Self {
-            protocol: derive_domain_digest(protocol_id, sponge_info, session),
-            session: None,
+            domsep: derive_domain_digest(protocol_id, sponge_info, session),
             instance: WithoutInstance::new(),
-            derived: true,
+        }
+    }
+
+    pub fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>> {
+        DomainSeparator {
+            domsep: self.domsep,
+            instance: WithInstance(value),
         }
     }
 }
@@ -125,64 +120,26 @@ impl DomainSeparatorPrefix {
 
     /// Finishes with the session field and returns a [`DomainSeparator`] ready for `.instance(...)`.
     #[must_use]
-    pub fn with_session<I: ?Sized>(&self, session: &[u8]) -> DomainSeparator<WithoutInstance<I>, [u8; 64]> {
+    pub fn with_session<I: ?Sized>(&self, session: &[u8]) -> DomainSeparator<WithoutInstance<I>> {
         let mut hasher = self.prefix.clone();
         hasher.update((session.len() as u32).to_le_bytes());
         hasher.update(session);
         DomainSeparator {
-            protocol: hasher.finalize().into(),
-            session: None,
+            domsep: hasher.finalize().into(),
             instance: WithoutInstance::new(),
-            derived: true,
         }
     }
 }
 
-impl<I, S> DomainSeparator<I, S> {
-    #[must_use]
-    pub fn session(self, value: S) -> Self {
-        assert!(self.session.is_none());
-        assert!(
-            !self.derived,
-            "cannot attach session to a derive-built domain separator; session is already hashed into protocol bytes"
-        );
-        Self {
-            instance: self.instance,
-            session: Some(value),
-            protocol: self.protocol,
-            derived: self.derived,
-        }
-    }
-}
-
-impl<I: ?Sized, S> DomainSeparator<WithoutInstance<I>, S> {
-    pub fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>, S> {
-        DomainSeparator {
-            protocol: self.protocol,
-            session: self.session,
-            instance: WithInstance(value),
-            derived: self.derived,
-        }
-    }
-}
-
-impl<I, S> DomainSeparator<WithInstance<'_, I>, S>
+impl<I> DomainSeparator<WithInstance<'_, I>>
 where
     I: Encoding,
-    S: Encoding,
 {
     #[cfg(feature = "sha3")]
     #[must_use]
     pub fn std_prover(&self) -> ProverState {
-        let mut prover_state = ProverState::from(StdHash::from_protocol_id(self.protocol));
-        if self.derived {
-            prover_state.public_message(self.instance.0);
-        } else if let Some(session_info) = &self.session {
-            prover_state.public_message(session_info);
-            prover_state.public_message(self.instance.0);
-        } else {
-            prover_state.public_message(self.instance.0);
-        }
+        let mut prover_state = ProverState::from(StdHash::from_protocol_id(self.domsep));
+        prover_state.public_message(self.instance.0);
         prover_state
     }
 
@@ -190,38 +147,22 @@ where
     #[must_use]
     pub fn std_verifier<'ver>(&self, narg_string: &'ver [u8]) -> VerifierState<'ver, StdHash> {
         let mut verifier_state =
-            VerifierState::from_parts(StdHash::from_protocol_id(self.protocol), narg_string);
-        if self.derived {
-            verifier_state.public_message(self.instance.0);
-        } else if let Some(session_info) = &self.session {
-            verifier_state.public_message(session_info);
-            verifier_state.public_message(self.instance.0);
-        } else {
-            verifier_state.public_message(self.instance.0);
-        }
+            VerifierState::from_parts(StdHash::from_protocol_id(self.domsep), narg_string);
+        verifier_state.public_message(self.instance.0);
         verifier_state
     }
 }
 
-impl<I, S> DomainSeparator<WithInstance<'_, I>, S> {
+impl<I> DomainSeparator<WithInstance<'_, I>> {
     pub fn to_prover<H>(&self, h: H) -> ProverState<H, StdRng>
     where
         H: DuplexSpongeInterface,
         [u8; 64]: Encoding<[H::U]>,
-        S: Encoding<[H::U]>,
         I: Encoding<[H::U]>,
     {
         let mut prover_state = ProverState::from(h);
-        if self.derived {
-            prover_state.public_message(&self.protocol);
-            prover_state.public_message(self.instance.0);
-        } else {
-            prover_state.public_message(&self.protocol);
-            if let Some(session_info) = &self.session {
-                prover_state.public_message(session_info);
-            }
-            prover_state.public_message(self.instance.0);
-        }
+        prover_state.public_message(&self.domsep);
+        prover_state.public_message(self.instance.0);
         prover_state
     }
 
@@ -229,20 +170,11 @@ impl<I, S> DomainSeparator<WithInstance<'_, I>, S> {
     where
         H: DuplexSpongeInterface,
         [u8; 64]: Encoding<[H::U]>,
-        S: Encoding<[H::U]>,
         I: Encoding<[H::U]>,
     {
         let mut verifier_state = VerifierState::from_parts(h, narg_string);
-        if self.derived {
-            verifier_state.public_message(&self.protocol);
-            verifier_state.public_message(self.instance.0);
-        } else {
-            verifier_state.public_message(&self.protocol);
-            if let Some(session_info) = &self.session {
-                verifier_state.public_message(session_info);
-            }
-            verifier_state.public_message(self.instance.0);
-        }
+        verifier_state.public_message(&self.domsep);
+        verifier_state.public_message(self.instance.0);
         verifier_state
     }
 }

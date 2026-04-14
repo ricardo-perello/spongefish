@@ -5,7 +5,8 @@
 //! # Examples
 //!
 //! A [`ProverState`] and a [`VerifierState`] can be built via a [`DomainSeparator`], which
-//! is composed of a protocol identifier, an optional session identifier, and the public instance.
+//! binds a derived 64-byte domain tag (from protocol id, sponge/compilation info, and session bytes),
+//! then the public instance.
 //! The snippets below illustrate three typical situations.
 //!
 //! ```
@@ -154,13 +155,9 @@
 //!
 //! Previous version of this library were audited by [Radically Open Security].
 //!
-//! The user has full responsibility in instantiating [`DomainSeparator`] in a secure way,
-//! but the library requiring three elements on initialization:
-//! - a mandatory 64-bytes protocol identifier,
-//!   uniquely identifying the non-interactive protocol being built.
-//! - a 64-bytes session identifier,
-//!   corresponding to session and sub-session identifiers in universal composability lingo.
-//! - a mandatory instance that will be used in the proof system.
+//! The user has full responsibility in instantiating [`DomainSeparator`] in a secure way.
+//! [`DomainSeparator::derive`] takes protocol bytes, sponge/compilation info, and session bytes,
+//! hashes them into a 64-byte tag, then the instance is absorbed into the transcript.
 //!
 //! The developer is in charge of making sure they are chosen appropriately.
 //! In particular, the instance encoding function prefix-free.
@@ -214,6 +211,8 @@ mod domain_separator;
 pub use codecs::ByteArray;
 pub use codecs::{Codec, Decoding, Encoding};
 pub use domain_separator::DomainSeparator;
+pub use domain_separator::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO;
+pub use domain_separator::protocol_label;
 #[cfg(feature = "sha2")]
 pub use domain_separator::{derive_domain_digest, DomainSeparatorPrefix};
 #[doc(hidden)]
@@ -240,26 +239,39 @@ pub type StdHash = instantiations::Shake128;
 #[macro_export]
 macro_rules! domain_separator {
     ($fmt:literal $(, $arg:expr)* $(,)? ; $sess_fmt:literal $(, $sess_arg:expr)* $(,)?) => {{
-        $crate::domain_separator!($fmt $(, $arg)*)
-            .session($crate::session_id(core::format_args!($sess_fmt $(, $sess_arg)*)))
+        let protocol = $crate::protocol_label(core::format_args!($fmt $(, $arg)*));
+        let sess = $crate::session_id(core::format_args!($sess_fmt $(, $sess_arg)*));
+        $crate::DomainSeparator::derive(
+            protocol.as_slice(),
+            $crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+            sess.as_slice(),
+        )
     }};
     ($fmt:literal $(, $arg:expr)* $(,)? ; $session:expr $(,)?) => {{
-        $crate::domain_separator!($fmt $(, $arg)*)
-            .session($crate::session_id_from_str(&$session))
+        let protocol = $crate::protocol_label(core::format_args!($fmt $(, $arg)*));
+        let sess = $crate::session_id_from_str(&$session);
+        $crate::DomainSeparator::derive(
+            protocol.as_slice(),
+            $crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+            sess.as_slice(),
+        )
     }};
     ($fmt:literal $(, $arg:expr)* $(,)?) => {{
-        #[allow(deprecated)]
-        $crate::DomainSeparator::<_, [u8; 64]>::new($crate::protocol_id(core::format_args!($fmt $(, $arg)*)))
+        let protocol = $crate::protocol_label(core::format_args!($fmt $(, $arg)*));
+        $crate::DomainSeparator::derive(
+            protocol.as_slice(),
+            $crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+            &[],
+        )
     }};
 }
 
-/// Attaches a 64-byte session identifier to the domain separator.
+/// Builds session bytes (64-byte field, high half from SHAKE128) for use with [`DomainSeparator::derive`].
 ///
 /// ```
 /// # use spongefish::{DomainSeparator, session};
 ///
-/// DomainSeparator::new([0u8; 64])
-///     .session(session!("example at L{{line!()}}"))
+/// let _ = DomainSeparator::derive(b"proto", b"sponge-info", session!("example at L{{line!()}}").as_slice())
 ///     .instance(b"empty");
 /// ```
 #[macro_export]
