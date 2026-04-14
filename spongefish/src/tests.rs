@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use rand::RngCore;
 use sha3::digest::{ExtendableOutput, Update, XofReader};
 
@@ -70,12 +72,101 @@ fn domain_separator_macro_session_arms_agree_on_domsep() {
     let a = crate::domain_separator!("variable sessions"; "shared session").instance(&instance);
     let session_str = "shared session";
     let b = crate::domain_separator!("variable sessions"; session_str).instance(&instance);
-    let session_owned = alloc::string::String::from("shared session");
+    let session_owned = String::from("shared session");
     let c = crate::domain_separator!("variable sessions"; session_owned).instance(&instance);
     let d = crate::domain_separator!("variable sessions"; &session_owned).instance(&instance);
     assert_eq!(a.domsep, b.domsep);
     assert_eq!(a.domsep, c.domsep);
     assert_eq!(a.domsep, d.domsep);
+}
+
+/// Empty `session` in [`crate::DomainSeparator::derive`] must not coincide with a real session
+/// (upstream tested this via `without_session()` vs `.session(...)`).
+#[test]
+fn empty_session_distinct_from_nonempty_session() {
+    let instance = [0u8; 0];
+    let proto = crate::protocol_label(core::format_args!("app"));
+    let no_sess = crate::DomainSeparator::derive(
+        proto.as_slice(),
+        crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+        &[],
+    )
+    .instance(&instance);
+    let with_sess = crate::domain_separator!("app"; "production").instance(&instance);
+
+    assert_ne!(no_sess.domsep, with_sess.domsep);
+
+    let mut a = no_sess.std_prover();
+    let mut b = with_sess.std_prover();
+    assert_ne!(a.verifier_message::<u32>(), b.verifier_message::<u32>());
+}
+
+#[test]
+fn different_derive_session_bytes_diverge() {
+    use crate::DomainSeparator;
+
+    struct Ctx(u64);
+
+    impl Encoding for Ctx {
+        fn encode(&self) -> impl AsRef<[u8]> {
+            self.0.to_le_bytes()
+        }
+    }
+
+    let instance = [0u8; 0];
+    let proto = crate::protocol_id(core::format_args!("p"));
+    let a = DomainSeparator::derive(
+        proto.as_slice(),
+        crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+        Ctx(1).encode().as_ref(),
+    )
+    .instance(&instance);
+    let b = DomainSeparator::derive(
+        proto.as_slice(),
+        crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+        Ctx(2).encode().as_ref(),
+    )
+    .instance(&instance);
+
+    let mut pa = a.std_prover();
+    let mut pb = b.std_prover();
+    assert_ne!(
+        pa.verifier_message::<u32>(),
+        pb.verifier_message::<u32>()
+    );
+}
+
+#[test]
+fn same_session_encoding_same_challenge() {
+    struct Ctx(String);
+
+    impl Encoding for Ctx {
+        fn encode(&self) -> impl AsRef<[u8]> {
+            self.0.as_str().encode()
+        }
+    }
+
+    let instance = [0u8; 0];
+    let proto = crate::protocol_label(core::format_args!("borrowed session"));
+    let b1 = Ctx(String::from("borrowed-session"));
+    let b2 = Ctx(String::from("borrowed-session"));
+    let dom1 = crate::DomainSeparator::derive(
+        proto.as_slice(),
+        crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+        b1.encode().as_ref(),
+    )
+    .instance(&instance);
+    let dom2 = crate::DomainSeparator::derive(
+        proto.as_slice(),
+        crate::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
+        b2.encode().as_ref(),
+    )
+    .instance(&instance);
+
+    assert_eq!(dom1.domsep, dom2.domsep);
+    let c1: u64 = dom1.std_prover().verifier_message();
+    let c2: u64 = dom2.std_prover().verifier_message();
+    assert_eq!(c1, c2);
 }
 
 #[test]
@@ -184,4 +275,13 @@ fn verifier_prover_message_rolls_back_on_deserialize_error() {
     assert!(verifier.prover_message::<BadMessage>().is_err());
     assert_eq!(verifier.narg_string, &proof);
     assert!(verifier.check_eof().is_err());
+}
+
+#[test]
+fn str_encoding_prefixes_utf8_with_le_u32_length() {
+    let encoded = "hello".encode();
+    assert_eq!(encoded.as_ref(), b"\x05\x00\x00\x00hello");
+
+    let encoded_utf8 = "hé".encode();
+    assert_eq!(encoded_utf8.as_ref(), b"\x03\x00\x00\x00h\xc3\xa9");
 }

@@ -46,7 +46,7 @@ impl<H: DuplexSpongeInterface> VerifierState<'_, H> {
     ///
     /// ```
     /// let proof = [0u8; 0];
-    /// let mut verifier = spongefish::domain_separator!("examples";"VerifierState::public_message")
+    /// let mut verifier = spongefish::domain_separator!("examples"; "VerifierState::public_message")
     ///     .instance(&0u32)
     ///     .std_verifier(&proof);
     /// verifier.public_message(&123u32);
