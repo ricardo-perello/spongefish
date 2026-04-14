@@ -214,6 +214,8 @@ mod domain_separator;
 pub use codecs::ByteArray;
 pub use codecs::{Codec, Decoding, Encoding};
 pub use domain_separator::DomainSeparator;
+#[cfg(feature = "sha2")]
+pub use domain_separator::{derive_domain_digest, DomainSeparatorPrefix};
 #[doc(hidden)]
 pub use domain_separator::{protocol_id, session_id, session_id_from_str};
 pub use duplex_sponge::{DuplexSponge, DuplexSpongeInterface, Permutation, Unit};
@@ -246,6 +248,7 @@ macro_rules! domain_separator {
             .session($crate::session_id_from_str(&$session))
     }};
     ($fmt:literal $(, $arg:expr)* $(,)?) => {{
+        #[allow(deprecated)]
         $crate::DomainSeparator::<_, [u8; 64]>::new($crate::protocol_id(core::format_args!($fmt $(, $arg)*)))
     }};
 }

@@ -78,6 +78,7 @@ fn main() {
     let pk = generator * sk;
     let instance = [generator, pk];
 
+    #[allow(deprecated)]
     let domain_sep = DomainSeparator::new(Schnorr::protocol_id())
         .session(spongefish::session!("spongefish examples"))
         .instance(&instance);

@@ -126,6 +126,7 @@ fn std_transcript_initialization_matches_manual_shake128() {
     let session = crate::session_id(core::format_args!("discrete_logarithm"));
     let instance = [42u32, 7u32];
 
+    #[allow(deprecated)]
     let domain = crate::DomainSeparator::new(protocol)
         .session(session)
         .instance(&instance);
@@ -140,6 +141,36 @@ fn std_transcript_initialization_matches_manual_shake128() {
     let expected = manual.squeeze_array::<32>();
 
     assert_eq!(challenge, expected);
+}
+
+#[test]
+fn derive_matches_prefix_builder_and_differs_on_inputs() {
+    let p = b"p";
+    let i = b"i";
+    let s = b"s";
+    let d = crate::derive_domain_digest(p, i, s);
+    let from_builder = crate::DomainSeparatorPrefix::new(p, i).with_session::<[u32; 0]>(s);
+    assert_eq!(from_builder.protocol, d);
+    assert!(from_builder.derived);
+
+    let d2 = crate::derive_domain_digest(p, i, b"t");
+    assert_ne!(d, d2);
+}
+
+#[cfg(feature = "keccak")]
+#[test]
+fn derived_duplex_keccak_challenge_matches() {
+    use crate::instantiations::Keccak;
+
+    let instance = [3u32, 14u32];
+    let dom = crate::DomainSeparator::derive(b"proto", b"sponge", b"sess").instance(&instance);
+
+    let mut p = dom.to_prover(Keccak::default());
+    let challenge: u32 = p.verifier_message();
+    let proof = p.narg_string().to_vec();
+
+    let mut v = dom.to_verifier(Keccak::default(), &proof);
+    assert_eq!(v.verifier_message::<u32>(), challenge);
 }
 
 #[test]
