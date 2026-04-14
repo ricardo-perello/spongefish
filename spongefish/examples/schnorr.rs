@@ -3,7 +3,7 @@ use ark_ec::{CurveGroup, PrimeGroup};
 use ark_std::UniformRand;
 use rand::rngs::OsRng;
 use spongefish::{
-    protocol_id, Codec, DomainSeparator, DOMAIN_SEPARATOR_MACRO_SPONGE_INFO, Encoding,
+    protocol_label, Codec, DomainSeparator, DOMAIN_SEPARATOR_MACRO_SPONGE_INFO, Encoding,
     NargDeserialize, NargSerialize, ProverState, VerificationError, VerificationResult,
     VerifierState,
 };
@@ -11,8 +11,8 @@ use spongefish::{
 struct Schnorr;
 
 impl Schnorr {
-    pub fn protocol_id() -> [u8; 64] {
-        protocol_id(core::format_args!("schnorr proof"))
+    pub fn protocol_id() -> Vec<u8> {
+        protocol_label(core::format_args!("schnorr proof"))
     }
 
     /// Here the proving algorithm takes as input a [`ProverState`], and an instance-witness pair.
