@@ -24,6 +24,7 @@ pub const DOMAIN_SEPARATOR_MACRO_SPONGE_INFO: &[u8] = b"spongefish/domain_separa
 ///
 /// domain_separator!("this will not compile").std_prover();
 /// ```
+#[derive(Debug, Clone, Copy)]
 pub struct WithoutInstance<I: ?Sized>(PhantomData<I>);
 
 impl<I: ?Sized> WithoutInstance<I> {
@@ -41,6 +42,7 @@ impl<I: ?Sized> WithoutInstance<I> {
 ///     .instance(b"yellowsubmarine")
 ///     .std_prover();
 /// ```
+#[derive(Debug, Clone, Copy)]
 pub struct WithInstance<'i, I: ?Sized>(&'i I);
 
 /// Domain separator for a Fiat--Shamir transformation.
@@ -48,6 +50,7 @@ pub struct WithInstance<'i, I: ?Sized>(&'i I);
 /// Built only via [`DomainSeparator::derive`]: `domsep` is a 64-byte SHA-512 digest over
 /// length-prefixed `(protocol_id, sponge_info, session)`, then the instance is absorbed
 /// separately (duplex or `StdHash` bootstrap).
+#[derive(Debug, Clone, Copy)]
 pub struct DomainSeparator<I> {
     /// 64-byte domain tag (SHA-512 over the triple); feeds `StdHash::from_protocol_id` / duplex init.
     pub domsep: [u8; 64],
