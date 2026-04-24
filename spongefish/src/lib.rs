@@ -216,9 +216,9 @@ mod domain_separator;
 #[doc(hidden)]
 pub use codecs::ByteArray;
 pub use codecs::{Codec, Decoding, Encoding};
+pub use domain_separator::protocol_label;
 pub use domain_separator::DomainSeparator;
 pub use domain_separator::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO;
-pub use domain_separator::protocol_label;
 #[cfg(feature = "sha2")]
 pub use domain_separator::{derive_domain_digest, DomainSeparatorPrefix};
 #[doc(hidden)]

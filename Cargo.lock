@@ -1237,6 +1237,10 @@ dependencies = [
  "curve25519-dalek",
  "k256",
  "p256",
+ "p3-baby-bear",
+ "p3-field",
+ "p3-koala-bear",
+ "p3-mersenne-31",
 ]
 
 [[package]]

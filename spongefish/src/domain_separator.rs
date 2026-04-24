@@ -25,9 +25,11 @@ pub const DOMAIN_SEPARATOR_MACRO_SPONGE_INFO: &[u8] = b"spongefish/domain_separa
 /// domain_separator!("this will not compile").std_prover();
 /// ```
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct WithoutInstance<I: ?Sized>(PhantomData<I>);
 
 impl<I: ?Sized> WithoutInstance<I> {
+    #[allow(dead_code)]
     const fn new() -> Self {
         Self(PhantomData)
     }
@@ -60,11 +62,7 @@ pub struct DomainSeparator<I> {
 /// Length-prefixed SHA-512 domain derivation: `LE32(|p|)||p||LE32(|i|)||i||LE32(|s|)||s`.
 #[cfg(feature = "sha2")]
 #[must_use]
-pub fn derive_domain_digest(
-    protocol_id: &[u8],
-    sponge_info: &[u8],
-    session: &[u8],
-) -> [u8; 64] {
+pub fn derive_domain_digest(protocol_id: &[u8], sponge_info: &[u8], session: &[u8]) -> [u8; 64] {
     let mut hasher = Sha512::new();
     for field in [protocol_id, sponge_info, session] {
         hasher.update((field.len() as u32).to_le_bytes());
@@ -94,7 +92,8 @@ impl<I: ?Sized> DomainSeparator<WithoutInstance<I>> {
         }
     }
 
-    pub fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>> {
+    #[must_use]
+    pub const fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>> {
         DomainSeparator {
             domsep: self.domsep,
             instance: WithInstance(value),
