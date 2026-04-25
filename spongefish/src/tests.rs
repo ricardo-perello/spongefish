@@ -130,10 +130,7 @@ fn different_derive_session_bytes_diverge() {
 
     let mut pa = a.std_prover();
     let mut pb = b.std_prover();
-    assert_ne!(
-        pa.verifier_message::<u32>(),
-        pb.verifier_message::<u32>()
-    );
+    assert_ne!(pa.verifier_message::<u32>(), pb.verifier_message::<u32>());
 }
 
 #[test]

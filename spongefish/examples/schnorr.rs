@@ -3,9 +3,8 @@ use ark_ec::{CurveGroup, PrimeGroup};
 use ark_std::UniformRand;
 use rand::rngs::OsRng;
 use spongefish::{
-    protocol_label, Codec, DomainSeparator, DOMAIN_SEPARATOR_MACRO_SPONGE_INFO, Encoding,
-    NargDeserialize, NargSerialize, ProverState, VerificationError, VerificationResult,
-    VerifierState,
+    protocol_label, Codec, DomainSeparator, Encoding, NargDeserialize, NargSerialize, ProverState,
+    VerificationError, VerificationResult, VerifierState, DOMAIN_SEPARATOR_MACRO_SPONGE_INFO,
 };
 
 struct Schnorr;

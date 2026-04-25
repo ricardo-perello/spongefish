@@ -196,6 +196,10 @@ mod narg_verifier;
 /// Trait implementation for common ZKP libraries.
 mod drivers;
 
+/// DSFS compiler over the Argus IA/NARG abstractions.
+#[cfg(feature = "keccak")]
+pub mod dsfs;
+
 /// Utilities for serializing prover messages and de-serializing NARG strings.
 pub(crate) mod io;
 
@@ -212,9 +216,9 @@ mod domain_separator;
 #[doc(hidden)]
 pub use codecs::ByteArray;
 pub use codecs::{Codec, Decoding, Encoding};
+pub use domain_separator::protocol_label;
 pub use domain_separator::DomainSeparator;
 pub use domain_separator::DOMAIN_SEPARATOR_MACRO_SPONGE_INFO;
-pub use domain_separator::protocol_label;
 #[cfg(feature = "sha2")]
 pub use domain_separator::{derive_domain_digest, DomainSeparatorPrefix};
 #[doc(hidden)]
