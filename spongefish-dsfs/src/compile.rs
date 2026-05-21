@@ -7,9 +7,12 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
-    NonInteractiveArgument, NonInteractiveReduction,
+    Encoding, IndexedInteractiveArgument, IndexedInteractiveReduction, InteractiveArgument,
+    InteractiveReduction, NargDeserialize, NargProof, NonInteractiveArgument,
+    NonInteractiveReduction,
 };
+
+use crate::prepared::{PreparedDsfs, PreparedDsfsReduction};
 
 use spongefish::{DomainSeparator, DuplexSpongeInterface};
 
@@ -36,6 +39,28 @@ impl<IA, S, H, const SALT_LEN: usize> Dsfs<IA, S, H, SALT_LEN> {
             sponge,
             _session: PhantomData,
         }
+    }
+}
+
+/// Inherent methods that turn a [`Dsfs`] over an [`IndexedInteractiveArgument`]
+/// into a [`PreparedDsfs`] by either running the indexer or accepting
+/// externally-stored preprocessing keys. The committed verifier index is always
+/// derived from `vk`.
+impl<IA, S, H, const SALT_LEN: usize> Dsfs<IA, S, H, SALT_LEN>
+where
+    IA: IndexedInteractiveArgument,
+{
+    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfs<IA, S, H, SALT_LEN> {
+        let (pk, vk) = self.ia.index(ix);
+        PreparedDsfs::from_keys(self.ia, pk, vk, self.sponge)
+    }
+
+    pub fn with_keys(
+        self,
+        pk: IA::ProverKey,
+        vk: IA::VerifierKey,
+    ) -> PreparedDsfs<IA, S, H, SALT_LEN> {
+        PreparedDsfs::from_keys(self.ia, pk, vk, self.sponge)
     }
 }
 
@@ -102,6 +127,26 @@ impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN> {
             sponge,
             _session: PhantomData,
         }
+    }
+}
+
+/// Inherent methods that turn a [`DsfsReduction`] over an
+/// [`IndexedInteractiveReduction`] into a [`PreparedDsfsReduction`].
+impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN>
+where
+    IR: IndexedInteractiveReduction,
+{
+    pub fn prepare(self, ix: &IR::Index) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
+        let (pk, vk) = self.ir.index(ix);
+        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
+    }
+
+    pub fn with_keys(
+        self,
+        pk: IR::ProverKey,
+        vk: IR::VerifierKey,
+    ) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
+        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
     }
 }
 

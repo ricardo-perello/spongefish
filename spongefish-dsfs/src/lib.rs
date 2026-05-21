@@ -46,10 +46,12 @@ mod channel;
 mod compile;
 mod narg_security;
 mod params;
+mod prepared;
 
 pub use channel::TranscriptSponge;
 pub use channel::{SpongeProver, SpongeVerifier};
 pub use compile::{ByteDuplexSponge, Dsfs, DsfsReduction};
+pub use prepared::{PreparedDsfs, PreparedDsfsReduction};
 pub use narg_security::{
     reduction_security_for_source_bound, reduction_security_for_source_bound_with,
     reduction_security_for_source_instance, reduction_security_for_source_instance_with,
