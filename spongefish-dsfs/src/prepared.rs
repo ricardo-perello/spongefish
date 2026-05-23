@@ -21,8 +21,9 @@ use rand::RngCore;
 
 use ia_core::{
     CommittedIndexBytes, Encoding, IndexedInstanceRef, IndexedInteractiveArgument,
-    IndexedInteractiveReduction, NargDeserialize, NargProof, NonInteractiveArgument,
-    NonInteractiveReduction, VerificationError, VerificationResult, VerifierKeyCommitment,
+    IndexedInteractiveReduction, IndexedNonInteractiveArgument, IndexedNonInteractiveReduction,
+    NargDeserialize, NargProof, NonInteractiveArgument, NonInteractiveReduction,
+    VerificationError, VerificationResult, VerifierKeyCommitment,
 };
 
 use spongefish::DomainSeparator;
@@ -129,6 +130,20 @@ where
     }
 }
 
+impl<IA, S, H, const SALT_LEN: usize> IndexedNonInteractiveArgument
+    for PreparedDsfs<IA, S, H, SALT_LEN>
+where
+    H: SpongeInfo + Clone,
+    IA: IndexedInteractiveArgument,
+    S: Encoding<[u8]>,
+    IA::Instance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+{
+    fn committed_index(&self) -> &CommittedIndexBytes {
+        &self.committed_index
+    }
+}
+
 /// DSFS wrapper for an indexed reduction with preprocessing keys derived (or
 /// supplied) up front.
 ///
@@ -232,6 +247,20 @@ where
             instance,
             proof.as_bytes(),
         )
+    }
+}
+
+impl<IR, S, H, const SALT_LEN: usize> IndexedNonInteractiveReduction
+    for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+where
+    H: SpongeInfo + Clone,
+    IR: IndexedInteractiveReduction,
+    S: Encoding<[u8]>,
+    IR::SourceInstance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+{
+    fn committed_index(&self) -> &CommittedIndexBytes {
+        &self.committed_index
     }
 }
 
@@ -354,8 +383,9 @@ mod tests {
 
     use ia_core::{
         CommittedIndexBytes, IndexedInteractiveArgument, IndexedInteractiveReduction,
-        NonInteractiveArgument, NonInteractiveReduction, ProverChannel, VerificationError,
-        VerificationResult, VerifierChannel, VerifierKeyCommitment,
+        IndexedNonInteractiveArgument, IndexedNonInteractiveReduction, NonInteractiveArgument,
+        NonInteractiveReduction, ProverChannel, VerificationError, VerificationResult,
+        VerifierChannel, VerifierKeyCommitment,
     };
 
     use crate::params::Keccak;
@@ -589,6 +619,30 @@ mod tests {
             .as_ref(),
             expected.as_ref()
         );
+    }
+
+    /// Generic-consumer test: a function bound by IndexedNonInteractiveArgument
+    /// can pull the committed index off any preprocessed NARG without knowing
+    /// its concrete type. This is the polymorphism story the trait was added
+    /// for (audit trails, key persistence, etc.).
+    #[test]
+    fn prepared_dsfs_exposes_committed_index_via_trait_method() {
+        fn audit<N: IndexedNonInteractiveArgument>(narg: &N) -> CommittedIndexBytes {
+            narg.committed_index().clone()
+        }
+        let prepared =
+            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+        assert_eq!(audit(&prepared).as_bytes(), &[1, 2, 3]);
+    }
+
+    #[test]
+    fn prepared_dsfs_reduction_exposes_committed_index_via_trait_method() {
+        fn audit<N: IndexedNonInteractiveReduction>(narg: &N) -> CommittedIndexBytes {
+            narg.committed_index().clone()
+        }
+        let prepared =
+            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x5Au8);
+        assert_eq!(audit(&prepared).as_bytes(), &[0x5A]);
     }
 }
 
