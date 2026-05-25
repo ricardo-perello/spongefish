@@ -89,7 +89,6 @@ where
     type Session = S;
     type Instance = IA::Instance;
     type Witness = IA::Witness;
-    type Proof = NargProof;
 
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ia.protocol_id()
@@ -100,7 +99,7 @@ where
         session: &Self::Session,
         instance: &Self::Instance,
         witness: &Self::Witness,
-    ) -> Self::Proof {
+    ) -> NargProof {
         prepared_prove_with_sponge_and_salt::<IA, H, S, SALT_LEN>(
             &self.ia,
             &self.pk,
@@ -116,7 +115,7 @@ where
         &self,
         session: &Self::Session,
         instance: &Self::Instance,
-        proof: &Self::Proof,
+        proof: &NargProof,
     ) -> VerificationResult<()> {
         prepared_verify_with_sponge_and_salt::<IA, H, S, SALT_LEN>(
             &self.ia,
@@ -209,7 +208,6 @@ where
     type TargetInstance = IR::TargetInstance;
     type SourceWitness = IR::SourceWitness;
     type TargetWitness = IR::TargetWitness;
-    type Proof = NargProof;
 
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ir.protocol_id()
@@ -220,7 +218,7 @@ where
         session: &Self::Session,
         instance: &Self::SourceInstance,
         witness: &Self::SourceWitness,
-    ) -> (Self::Proof, Self::TargetInstance, Self::TargetWitness) {
+    ) -> (NargProof, Self::TargetInstance, Self::TargetWitness) {
         prepared_prove_reduction_with_sponge_and_salt::<IR, H, S, SALT_LEN>(
             &self.ir,
             &self.pk,
@@ -236,7 +234,7 @@ where
         &self,
         session: &Self::Session,
         instance: &Self::SourceInstance,
-        proof: &Self::Proof,
+        proof: &NargProof,
     ) -> VerificationResult<Self::TargetInstance> {
         prepared_verify_reduction_with_sponge_and_salt::<IR, H, S, SALT_LEN>(
             &self.ir,
