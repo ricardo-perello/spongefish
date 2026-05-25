@@ -21,9 +21,9 @@ use rand::RngCore;
 
 use ia_core::{
     CommittedIndexBytes, Encoding, IndexedInstanceRef, IndexedInteractiveArgument,
-    IndexedInteractiveReduction, IndexedNonInteractiveArgument, IndexedNonInteractiveReduction,
-    NargDeserialize, NargProof, NonInteractiveArgument, NonInteractiveReduction,
-    VerificationError, VerificationResult, VerifierKeyCommitment,
+    IndexedInteractiveReduction, NargDeserialize, NargProof, NonInteractiveArgument,
+    NonInteractiveReduction, Preprocessed, VerificationError, VerificationResult,
+    VerifierKeyCommitment,
 };
 
 use spongefish::DomainSeparator;
@@ -129,15 +129,21 @@ where
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> IndexedNonInteractiveArgument
-    for PreparedDsfs<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfs<IA, S, H, SALT_LEN>
 where
-    H: SpongeInfo + Clone,
     IA: IndexedInteractiveArgument,
-    S: Encoding<[u8]>,
-    IA::Instance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
 {
+    type ProverKey = IA::ProverKey;
+    type VerifierKey = IA::VerifierKey;
+
+    fn prover_key(&self) -> &Self::ProverKey {
+        &self.pk
+    }
+
+    fn verifier_key(&self) -> &Self::VerifierKey {
+        &self.vk
+    }
+
     fn committed_index(&self) -> &CommittedIndexBytes {
         &self.committed_index
     }
@@ -248,15 +254,21 @@ where
     }
 }
 
-impl<IR, S, H, const SALT_LEN: usize> IndexedNonInteractiveReduction
-    for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsReduction<IR, S, H, SALT_LEN>
 where
-    H: SpongeInfo + Clone,
     IR: IndexedInteractiveReduction,
-    S: Encoding<[u8]>,
-    IR::SourceInstance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
 {
+    type ProverKey = IR::ProverKey;
+    type VerifierKey = IR::VerifierKey;
+
+    fn prover_key(&self) -> &Self::ProverKey {
+        &self.pk
+    }
+
+    fn verifier_key(&self) -> &Self::VerifierKey {
+        &self.vk
+    }
+
     fn committed_index(&self) -> &CommittedIndexBytes {
         &self.committed_index
     }
@@ -382,8 +394,8 @@ mod tests {
     use ia_core::{
         CommittedIndexBytes, IndexedInteractiveArgument, IndexedInteractiveReduction,
         IndexedNonInteractiveArgument, IndexedNonInteractiveReduction, NonInteractiveArgument,
-        NonInteractiveReduction, ProverChannel, VerificationError, VerificationResult,
-        VerifierChannel, VerifierKeyCommitment,
+        NonInteractiveReduction, Preprocessed, ProverChannel, VerificationError,
+        VerificationResult, VerifierChannel, VerifierKeyCommitment,
     };
 
     use crate::params::Keccak;
@@ -641,6 +653,42 @@ mod tests {
         let prepared =
             DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x5Au8);
         assert_eq!(audit(&prepared).as_bytes(), &[0x5A]);
+    }
+
+    /// Generic-consumer test: the `Preprocessed` capability is the single
+    /// discoverable home for preprocessing keys. A consumer bounded directly
+    /// by `Preprocessed` can reach `verifier_key()` (and `prover_key()` /
+    /// `committed_index()`) on any prepared wrapper, regardless of which
+    /// lattice plane it sits on.
+    #[test]
+    fn preprocessed_capability_exposes_verifier_key_polymorphically() {
+        fn vk_bytes<W: Preprocessed>(w: &W) -> Vec<u8>
+        where
+            W::VerifierKey: Clone,
+        {
+            w.verifier_key().committed_index().as_bytes().to_vec()
+        }
+        let arg_prepared =
+            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+        let red_prepared =
+            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x77u8);
+        // Same generic function works on both planes.
+        assert_eq!(vk_bytes(&arg_prepared), vec![1, 2, 3]);
+        assert_eq!(vk_bytes(&red_prepared), vec![0x77]);
+    }
+
+    /// Confirms the IndexedNonInteractive* aliases dispatch to the
+    /// Preprocessed accessors (blanket impl wiring).
+    #[test]
+    fn indexed_nia_alias_pulls_keys_from_preprocessed_supertrait() {
+        fn extract<N: IndexedNonInteractiveArgument>(narg: &N) -> (&N::VerifierKey, &CommittedIndexBytes) {
+            (narg.verifier_key(), narg.committed_index())
+        }
+        let prepared =
+            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![9, 9]);
+        let (vk, ci) = extract(&prepared);
+        assert_eq!(vk.0, vec![9, 9]);
+        assert_eq!(ci.as_bytes(), &[9, 9]);
     }
 }
 
