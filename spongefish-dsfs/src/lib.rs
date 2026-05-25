@@ -14,22 +14,24 @@
 //!   instantiate sponges, derive Fiat-Shamir challenges directly, or inspect
 //!   transcript internals.
 //!
-//! The free functions are the byte-oriented convenience API:
+//! The semantic constructors are the byte-oriented convenience API:
 //!
-//! - [`prove`] / [`verify`] compile an `InteractiveArgument`.
-//! - [`prove_reduction`] / [`verify_reduction`] compile an `InteractiveReduction`.
-//! - `*_with_salt` variants add an explicit prover-chosen salt message before
-//!   protocol execution.
-//! - `*_with_sponge` variants allow selecting a byte-oriented sponge such as
-//!   [`Keccak`] or [`StdHash`].
+//! - [`non_interactive_argument`] builds a DSFS wrapper for an
+//!   `InteractiveArgument`.
+//! - [`non_interactive_reduction`] builds a DSFS wrapper for an
+//!   `InteractiveReduction`.
+//! - `*_with_salt` constructor variants add an explicit prover-chosen salt
+//!   message before protocol execution.
+//! - The sponge argument selects a byte-oriented sponge such as [`Keccak`] or
+//!   [`StdHash`].
 //!
 //! Prover functions return [`ia_core::NargProof`]. Its `as_bytes()` method
 //! exposes the raw DSFS proof string expected by the verifier functions.
 //! Verification always checks EOF, so trailing proof bytes are rejected.
 //!
-//! The [`Dsfs`] and [`DsfsReduction`] wrappers implement the abstract
-//! non-interactive traits from `ia-core` for callers that want to pass a DSFS
-//! compiler around as a first-class NARG.
+//! The returned wrappers implement the abstract non-interactive traits from
+//! `ia-core`. When constructed around an indexed body, call `.prepare(&ix)` or
+//! `.with_keys(pk, vk)` before proving or verifying.
 //!
 //! Transcript invariants maintained here:
 //!
@@ -50,8 +52,10 @@ mod prepared;
 
 pub use channel::TranscriptSponge;
 pub use channel::{SpongeProver, SpongeVerifier};
-pub use compile::{ByteDuplexSponge, Dsfs, DsfsReduction};
-pub use prepared::{PreparedDsfs, PreparedDsfsReduction};
+pub use compile::{
+    non_interactive_argument, non_interactive_argument_with_salt, non_interactive_reduction,
+    non_interactive_reduction_with_salt, ByteDuplexSponge, DsfsArgument, DsfsReduction,
+};
 pub use narg_security::{
     reduction_security_for_source_bound, reduction_security_for_source_bound_with,
     reduction_security_for_source_instance, reduction_security_for_source_instance_with,
@@ -62,3 +66,4 @@ pub use params::{
     DuplexSpongeParamsExt, Keccak, SpongeInfo, SpongeParams, StdHash, STD_HASH_SPONGE_PARAMS,
     STD_SPONGE_PARAMS,
 };
+pub use prepared::{PreparedDsfsArgument, PreparedDsfsReduction};

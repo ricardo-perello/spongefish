@@ -1,8 +1,8 @@
 //! Prepared DSFS wrappers for indexed (preprocessed) protocols.
 //!
-//! [`super::Dsfs`] and [`super::DsfsReduction`] expose `.prepare(&ix)` /
+//! [`super::DsfsArgument`] and [`super::DsfsReduction`] expose `.prepare(&ix)` /
 //! `.with_keys(pk, vk)` (in [`super::compile`]) that consume the unprepared
-//! wrapper and return a [`PreparedDsfs`] / [`PreparedDsfsReduction`] that
+//! wrapper and return a [`PreparedDsfsArgument`] / [`PreparedDsfsReduction`] that
 //! implements [`NonInteractiveArgument`] / [`NonInteractiveReduction`] over
 //! the *bare* per-claim instance: callers do not construct
 //! [`IndexedInstance`](ia_core::IndexedInstance) themselves.
@@ -34,8 +34,14 @@ use crate::params::{Keccak, SpongeInfo};
 /// DSFS wrapper for an indexed argument with preprocessing keys derived (or
 /// supplied) up front.
 ///
-/// Created via [`super::Dsfs::prepare`] or [`super::Dsfs::with_keys`].
-pub struct PreparedDsfs<IA: IndexedInteractiveArgument, S, H = Keccak, const SALT_LEN: usize = 0> {
+/// Created via [`super::DsfsArgument::prepare`] or
+/// [`super::DsfsArgument::with_keys`].
+pub struct PreparedDsfsArgument<
+    IA: IndexedInteractiveArgument,
+    S,
+    H = Keccak,
+    const SALT_LEN: usize = 0,
+> {
     ia: IA,
     pk: IA::ProverKey,
     vk: IA::VerifierKey,
@@ -45,7 +51,7 @@ pub struct PreparedDsfs<IA: IndexedInteractiveArgument, S, H = Keccak, const SAL
 }
 
 impl<IA: IndexedInteractiveArgument, S, H, const SALT_LEN: usize>
-    PreparedDsfs<IA, S, H, SALT_LEN>
+    PreparedDsfsArgument<IA, S, H, SALT_LEN>
 {
     /// Construct from an already-keyed indexed body. The committed index is
     /// derived from `vk` (Invariant 6).
@@ -78,7 +84,8 @@ impl<IA: IndexedInteractiveArgument, S, H, const SALT_LEN: usize>
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument for PreparedDsfs<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument
+    for PreparedDsfsArgument<IA, S, H, SALT_LEN>
 where
     H: SpongeInfo + Clone,
     IA: IndexedInteractiveArgument,
@@ -129,7 +136,7 @@ where
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfs<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsArgument<IA, S, H, SALT_LEN>
 where
     IA: IndexedInteractiveArgument,
 {
@@ -342,10 +349,7 @@ where
         .prover_message()
         .map_err(|_| VerificationError)?;
     ia.verify(&mut verifier_ch, vk, instance)?;
-    verifier_ch
-        .state
-        .check_eof()
-        .map_err(|_| VerificationError)
+    verifier_ch.state.check_eof().map_err(|_| VerificationError)
 }
 
 fn prepared_prove_reduction_with_sponge_and_salt<IR, H, S, const SALT_LEN: usize>(
@@ -392,14 +396,15 @@ mod tests {
     use alloc::vec::Vec;
 
     use ia_core::{
-        CommittedIndexBytes, IndexedInteractiveArgument, IndexedInteractiveReduction,
-        IndexedNonInteractiveArgument, IndexedNonInteractiveReduction, NonInteractiveArgument,
-        NonInteractiveReduction, Preprocessed, ProverChannel, VerificationError,
-        VerificationResult, VerifierChannel, VerifierKeyCommitment,
+        ArgumentBody, CommittedIndexBytes, IndexedBody, IndexedInteractiveArgument,
+        IndexedInteractiveReduction, IndexedNonInteractiveArgument, IndexedNonInteractiveReduction,
+        NonInteractiveArgument, NonInteractiveReduction, Preprocessed, ProtocolBody, ProverChannel,
+        ReductionBody, VerificationError, VerificationResult, VerifierChannel,
+        VerifierKeyCommitment,
     };
 
     use crate::params::Keccak;
-    use crate::{Dsfs, DsfsReduction};
+    use crate::{non_interactive_argument, non_interactive_reduction, PreparedDsfsArgument};
 
     /// Minimal indexed argument: index is a `Vec<u8>` exposed as the verifier-
     /// key commitment; prover sends a one-byte message; verifier accepts when
@@ -416,21 +421,28 @@ mod tests {
         }
     }
 
-    impl IndexedInteractiveArgument for DummyIndexedArg {
-        type Index = Vec<u8>;
-        type ProverKey = ();
-        type VerifierKey = DummyVk;
-        type Instance = [u8; 1];
-        type Witness = [u8; 1];
-
+    impl ProtocolBody for DummyIndexedArg {
         fn protocol_id(&self) -> impl AsRef<[u8]> {
             ia_core::pad_protocol_id(b"dummy-prepared-arg")
         }
+    }
+
+    impl ArgumentBody for DummyIndexedArg {
+        type Instance = [u8; 1];
+        type Witness = [u8; 1];
+    }
+
+    impl IndexedBody for DummyIndexedArg {
+        type Index = Vec<u8>;
+        type ProverKey = ();
+        type VerifierKey = DummyVk;
 
         fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
             ((), DummyVk(ix.clone()))
         }
+    }
 
+    impl IndexedInteractiveArgument for DummyIndexedArg {
         fn prove<P: ProverChannel>(
             &self,
             ch: &mut P,
@@ -481,23 +493,30 @@ mod tests {
         }
     }
 
-    impl IndexedInteractiveReduction for XorWithKey {
-        type Index = u8;
-        type ProverKey = u8;
-        type VerifierKey = XorVk;
+    impl ProtocolBody for XorWithKey {
+        fn protocol_id(&self) -> impl AsRef<[u8]> {
+            ia_core::pad_protocol_id(b"xor-with-key")
+        }
+    }
+
+    impl ReductionBody for XorWithKey {
         type SourceInstance = [u8; 1];
         type TargetInstance = [u8; 1];
         type SourceWitness = ();
         type TargetWitness = ();
+    }
 
-        fn protocol_id(&self) -> impl AsRef<[u8]> {
-            ia_core::pad_protocol_id(b"xor-with-key")
-        }
+    impl IndexedBody for XorWithKey {
+        type Index = u8;
+        type ProverKey = u8;
+        type VerifierKey = XorVk;
 
         fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
             (*ix, XorVk(*ix))
         }
+    }
 
+    impl IndexedInteractiveReduction for XorWithKey {
         fn prove<P: ProverChannel>(
             &self,
             ch: &mut P,
@@ -530,7 +549,8 @@ mod tests {
     #[test]
     fn prepared_dsfs_round_trip_succeeds() {
         let prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![1, 2, 3]);
         let session = [0u8; 64];
         let instance = [0u8; 1];
         let witness = [0xABu8];
@@ -542,8 +562,9 @@ mod tests {
 
     #[test]
     fn prepared_dsfs_with_keys_round_trip_succeeds() {
-        let prepared = Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default())
-            .with_keys((), DummyVk(vec![42]));
+        let prepared =
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .with_keys((), DummyVk(vec![42]));
         let session = [0u8; 64];
         let instance = [0u8; 1];
         let witness = [0xABu8];
@@ -556,9 +577,11 @@ mod tests {
         // Prover and verifier use *different* indices => different vk bytes
         // => different transcripts => verification must fail.
         let prover_prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![1, 2, 3]);
         let verifier_prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![9, 9, 9]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![9, 9, 9]);
         assert_ne!(
             prover_prepared.committed_index(),
             verifier_prepared.committed_index()
@@ -576,7 +599,8 @@ mod tests {
     #[test]
     fn prepared_dsfs_verify_rejects_trailing_proof_bytes() {
         let prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![1, 2, 3]);
         let session = [0u8; 64];
         let instance = [0u8; 1];
         let witness = [0xABu8];
@@ -588,8 +612,8 @@ mod tests {
 
     #[test]
     fn prepared_dsfs_reduction_round_trip_returns_target() {
-        let prepared =
-            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x5Au8);
+        let prepared = non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
+            .prepare(&0x5Au8);
         let session = [0u8; 64];
         let instance = [0x42u8];
         let (proof, target_p, ()) = prepared.prove(&session, &instance, &());
@@ -601,9 +625,11 @@ mod tests {
     #[test]
     fn prepared_dsfs_reduction_verify_rejects_different_committed_index() {
         let prover_prepared =
-            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x5Au8);
+            non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
+                .prepare(&0x5Au8);
         let verifier_prepared =
-            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x77u8);
+            non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
+                .prepare(&0x77u8);
 
         let session = [0u8; 64];
         let instance = [0x42u8];
@@ -613,19 +639,16 @@ mod tests {
             .is_err());
     }
 
-    use super::PreparedDsfs;
-
     /// Sanity check: prepared adapter's protocol_id delegates to the indexed
-    /// body. Guards against future refactors of PreparedDsfs::protocol_id.
+    /// body. Guards against future refactors of PreparedDsfsArgument::protocol_id.
     #[test]
     fn prepared_dsfs_protocol_id_delegates_to_body() {
         let prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![]);
-        let expected = IndexedInteractiveArgument::protocol_id(&DummyIndexedArg);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![]);
+        let expected = ProtocolBody::protocol_id(&DummyIndexedArg);
         assert_eq!(
-            <PreparedDsfs<DummyIndexedArg, [u8; 64]> as NonInteractiveArgument>::protocol_id(
-                &prepared
-            )
+            <PreparedDsfsArgument<DummyIndexedArg, [u8; 64]> as NonInteractiveArgument>::protocol_id(&prepared)
             .as_ref(),
             expected.as_ref()
         );
@@ -641,7 +664,8 @@ mod tests {
             narg.committed_index().clone()
         }
         let prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![1, 2, 3]);
         assert_eq!(audit(&prepared).as_bytes(), &[1, 2, 3]);
     }
 
@@ -650,8 +674,8 @@ mod tests {
         fn audit<N: IndexedNonInteractiveReduction>(narg: &N) -> CommittedIndexBytes {
             narg.committed_index().clone()
         }
-        let prepared =
-            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x5Au8);
+        let prepared = non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
+            .prepare(&0x5Au8);
         assert_eq!(audit(&prepared).as_bytes(), &[0x5A]);
     }
 
@@ -669,9 +693,11 @@ mod tests {
             w.verifier_key().committed_index().as_bytes().to_vec()
         }
         let arg_prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![1, 2, 3]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![1, 2, 3]);
         let red_prepared =
-            DsfsReduction::<_, [u8; 64]>::new(XorWithKey, Keccak::default()).prepare(&0x77u8);
+            non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
+                .prepare(&0x77u8);
         // Same generic function works on both planes.
         assert_eq!(vk_bytes(&arg_prepared), vec![1, 2, 3]);
         assert_eq!(vk_bytes(&red_prepared), vec![0x77]);
@@ -681,11 +707,14 @@ mod tests {
     /// Preprocessed accessors (blanket impl wiring).
     #[test]
     fn indexed_nia_alias_pulls_keys_from_preprocessed_supertrait() {
-        fn extract<N: IndexedNonInteractiveArgument>(narg: &N) -> (&N::VerifierKey, &CommittedIndexBytes) {
+        fn extract<N: IndexedNonInteractiveArgument>(
+            narg: &N,
+        ) -> (&N::VerifierKey, &CommittedIndexBytes) {
             (narg.verifier_key(), narg.committed_index())
         }
         let prepared =
-            Dsfs::<_, [u8; 64]>::new(DummyIndexedArg, Keccak::default()).prepare(&vec![9, 9]);
+            non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
+                .prepare(&vec![9, 9]);
         let (vk, ci) = extract(&prepared);
         assert_eq!(vk.0, vec![9, 9]);
         assert_eq!(ci.as_bytes(), &[9, 9]);

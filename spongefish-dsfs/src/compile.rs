@@ -12,7 +12,7 @@ use ia_core::{
     NonInteractiveReduction,
 };
 
-use crate::prepared::{PreparedDsfs, PreparedDsfsReduction};
+use crate::prepared::{PreparedDsfsArgument, PreparedDsfsReduction};
 
 use spongefish::{DomainSeparator, DuplexSpongeInterface};
 
@@ -25,13 +25,35 @@ pub trait ByteDuplexSponge: DuplexSpongeInterface<U = u8> {}
 impl<T: DuplexSpongeInterface<U = u8>> ByteDuplexSponge for T {}
 
 /// DSFS compiler wrapper implementing [`NonInteractiveArgument`] for an IA.
-pub struct Dsfs<IA, S, H = Keccak, const SALT_LEN: usize = 0> {
+///
+/// Prefer constructing this with [`non_interactive_argument`].
+pub struct DsfsArgument<IA, S, H = Keccak, const SALT_LEN: usize = 0> {
     pub ia: IA,
     pub sponge: H,
     _session: PhantomData<S>,
 }
 
-impl<IA, S, H, const SALT_LEN: usize> Dsfs<IA, S, H, SALT_LEN> {
+/// Construct the DSFS non-interactive-argument view of an interactive body.
+///
+/// If `IA: InteractiveArgument`, the returned wrapper implements
+/// [`NonInteractiveArgument`] immediately. If `IA: IndexedInteractiveArgument`,
+/// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
+/// implements [`NonInteractiveArgument`] plus the preprocessing capability.
+#[must_use]
+pub const fn non_interactive_argument<IA, S, H>(ia: IA, sponge: H) -> DsfsArgument<IA, S, H, 0> {
+    DsfsArgument::new(ia, sponge)
+}
+
+/// Construct a salted DSFS non-interactive-argument view.
+#[must_use]
+pub const fn non_interactive_argument_with_salt<IA, S, H, const SALT_LEN: usize>(
+    ia: IA,
+    sponge: H,
+) -> DsfsArgument<IA, S, H, SALT_LEN> {
+    DsfsArgument::new(ia, sponge)
+}
+
+impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN> {
     #[must_use]
     pub const fn new(ia: IA, sponge: H) -> Self {
         Self {
@@ -42,29 +64,29 @@ impl<IA, S, H, const SALT_LEN: usize> Dsfs<IA, S, H, SALT_LEN> {
     }
 }
 
-/// Inherent methods that turn a [`Dsfs`] over an [`IndexedInteractiveArgument`]
-/// into a [`PreparedDsfs`] by either running the indexer or accepting
+/// Inherent methods that turn a [`DsfsArgument`] over an
+/// [`IndexedInteractiveArgument`] into a [`PreparedDsfsArgument`] by either running the indexer or accepting
 /// externally-stored preprocessing keys. The committed verifier index is always
 /// derived from `vk`.
-impl<IA, S, H, const SALT_LEN: usize> Dsfs<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN>
 where
     IA: IndexedInteractiveArgument,
 {
-    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfs<IA, S, H, SALT_LEN> {
+    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
         let (pk, vk) = self.ia.index(ix);
-        PreparedDsfs::from_keys(self.ia, pk, vk, self.sponge)
+        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
     }
 
     pub fn with_keys(
         self,
         pk: IA::ProverKey,
         vk: IA::VerifierKey,
-    ) -> PreparedDsfs<IA, S, H, SALT_LEN> {
-        PreparedDsfs::from_keys(self.ia, pk, vk, self.sponge)
+    ) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
+        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument for Dsfs<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument for DsfsArgument<IA, S, H, SALT_LEN>
 where
     H: SpongeInfo + Clone,
     IA: InteractiveArgument,
@@ -127,6 +149,26 @@ impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN> {
             _session: PhantomData,
         }
     }
+}
+
+/// Construct the DSFS non-interactive-reduction view of an interactive body.
+///
+/// If `IR: InteractiveReduction`, the returned wrapper implements
+/// [`NonInteractiveReduction`] immediately. If `IR: IndexedInteractiveReduction`,
+/// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
+/// implements [`NonInteractiveReduction`] plus the preprocessing capability.
+#[must_use]
+pub const fn non_interactive_reduction<IR, S, H>(ir: IR, sponge: H) -> DsfsReduction<IR, S, H, 0> {
+    DsfsReduction::new(ir, sponge)
+}
+
+/// Construct a salted DSFS non-interactive-reduction view.
+#[must_use]
+pub const fn non_interactive_reduction_with_salt<IR, S, H, const SALT_LEN: usize>(
+    ir: IR,
+    sponge: H,
+) -> DsfsReduction<IR, S, H, SALT_LEN> {
+    DsfsReduction::new(ir, sponge)
 }
 
 /// Inherent methods that turn a [`DsfsReduction`] over an
@@ -334,4 +376,3 @@ where
         .map_err(|_| ia_core::VerificationError)?;
     Ok(target)
 }
-
