@@ -7,9 +7,9 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    Encoding, IndexedInteractiveArgument, IndexedInteractiveReduction, InteractiveArgument,
-    InteractiveReduction, NargDeserialize, NargProof, NonInteractiveArgument,
-    NonInteractiveReduction,
+    Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
+    NonInteractiveArgument, NonInteractiveReduction, PreprocessingInteractiveArgument,
+    PreprocessingInteractiveReduction,
 };
 
 use crate::prepared::{PreparedDsfsArgument, PreparedDsfsReduction};
@@ -36,7 +36,7 @@ pub struct DsfsArgument<IA, S, H = Keccak, const SALT_LEN: usize = 0> {
 /// Construct the DSFS non-interactive-argument view of an interactive body.
 ///
 /// If `IA: InteractiveArgument`, the returned wrapper implements
-/// [`NonInteractiveArgument`] immediately. If `IA: IndexedInteractiveArgument`,
+/// [`NonInteractiveArgument`] immediately. If `IA: PreprocessingInteractiveArgument`,
 /// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
 /// implements [`NonInteractiveArgument`] plus the preprocessing capability.
 #[must_use]
@@ -65,12 +65,12 @@ impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN> {
 }
 
 /// Inherent methods that turn a [`DsfsArgument`] over an
-/// [`IndexedInteractiveArgument`] into a [`PreparedDsfsArgument`] by either running the indexer or accepting
+/// [`PreprocessingInteractiveArgument`] into a [`PreparedDsfsArgument`] by either running the indexer or accepting
 /// externally-stored preprocessing keys. The committed verifier index is always
 /// derived from `vk`.
 impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN>
 where
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
 {
     pub fn prepare(self, ix: &IA::Index) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
         let (pk, vk) = self.ia.index(ix);
@@ -154,7 +154,7 @@ impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN> {
 /// Construct the DSFS non-interactive-reduction view of an interactive body.
 ///
 /// If `IR: InteractiveReduction`, the returned wrapper implements
-/// [`NonInteractiveReduction`] immediately. If `IR: IndexedInteractiveReduction`,
+/// [`NonInteractiveReduction`] immediately. If `IR: PreprocessingInteractiveReduction`,
 /// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
 /// implements [`NonInteractiveReduction`] plus the preprocessing capability.
 #[must_use]
@@ -172,10 +172,10 @@ pub const fn non_interactive_reduction_with_salt<IR, S, H, const SALT_LEN: usize
 }
 
 /// Inherent methods that turn a [`DsfsReduction`] over an
-/// [`IndexedInteractiveReduction`] into a [`PreparedDsfsReduction`].
+/// [`PreprocessingInteractiveReduction`] into a [`PreparedDsfsReduction`].
 impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN>
 where
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
 {
     pub fn prepare(self, ix: &IR::Index) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
         let (pk, vk) = self.ir.index(ix);

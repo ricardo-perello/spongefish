@@ -20,10 +20,10 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    CommittedIndexBytes, Encoding, IndexedInstanceRef, IndexedInteractiveArgument,
-    IndexedInteractiveReduction, NargDeserialize, NargProof, NonInteractiveArgument,
-    NonInteractiveReduction, Preprocessed, VerificationError, VerificationResult,
-    VerifierKeyCommitment,
+    CommittedIndexBytes, Encoding, IndexedInstanceRef, NargDeserialize, NargProof,
+    NonInteractiveArgument, NonInteractiveReduction, Preprocessed,
+    PreprocessingInteractiveArgument, PreprocessingInteractiveReduction, VerificationError,
+    VerificationResult, VerifierKeyCommitment,
 };
 
 use spongefish::DomainSeparator;
@@ -37,7 +37,7 @@ use crate::params::{Keccak, SpongeInfo};
 /// Created via [`super::DsfsArgument::prepare`] or
 /// [`super::DsfsArgument::with_keys`].
 pub struct PreparedDsfsArgument<
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
     S,
     H = Keccak,
     const SALT_LEN: usize = 0,
@@ -50,7 +50,7 @@ pub struct PreparedDsfsArgument<
     _session: PhantomData<S>,
 }
 
-impl<IA: IndexedInteractiveArgument, S, H, const SALT_LEN: usize>
+impl<IA: PreprocessingInteractiveArgument, S, H, const SALT_LEN: usize>
     PreparedDsfsArgument<IA, S, H, SALT_LEN>
 {
     /// Construct from an already-keyed indexed body. The committed index is
@@ -88,7 +88,7 @@ impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument
     for PreparedDsfsArgument<IA, S, H, SALT_LEN>
 where
     H: SpongeInfo + Clone,
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
@@ -138,7 +138,7 @@ where
 
 impl<IA, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsArgument<IA, S, H, SALT_LEN>
 where
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
 {
     type ProverKey = IA::ProverKey;
     type VerifierKey = IA::VerifierKey;
@@ -162,7 +162,7 @@ where
 /// Created via [`super::DsfsReduction::prepare`] or
 /// [`super::DsfsReduction::with_keys`].
 pub struct PreparedDsfsReduction<
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
     S,
     H = Keccak,
     const SALT_LEN: usize = 0,
@@ -175,7 +175,7 @@ pub struct PreparedDsfsReduction<
     _session: PhantomData<S>,
 }
 
-impl<IR: IndexedInteractiveReduction, S, H, const SALT_LEN: usize>
+impl<IR: PreprocessingInteractiveReduction, S, H, const SALT_LEN: usize>
     PreparedDsfsReduction<IR, S, H, SALT_LEN>
 {
     pub(crate) fn from_keys(ir: IR, pk: IR::ProverKey, vk: IR::VerifierKey, sponge: H) -> Self {
@@ -211,7 +211,7 @@ impl<IR, S, H, const SALT_LEN: usize> NonInteractiveReduction
     for PreparedDsfsReduction<IR, S, H, SALT_LEN>
 where
     H: SpongeInfo + Clone,
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
@@ -263,7 +263,7 @@ where
 
 impl<IR, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsReduction<IR, S, H, SALT_LEN>
 where
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
 {
     type ProverKey = IR::ProverKey;
     type VerifierKey = IR::VerifierKey;
@@ -296,7 +296,7 @@ fn prepared_prove_with_sponge_and_salt<IA, H, S, const SALT_LEN: usize>(
 ) -> NargProof
 where
     H: SpongeInfo,
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]>,
@@ -329,7 +329,7 @@ fn prepared_verify_with_sponge_and_salt<IA, H, S, const SALT_LEN: usize>(
 ) -> VerificationResult<()>
 where
     H: SpongeInfo,
-    IA: IndexedInteractiveArgument,
+    IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
@@ -363,7 +363,7 @@ fn prepared_prove_reduction_with_sponge_and_salt<IR, H, S, const SALT_LEN: usize
 ) -> (NargProof, IR::TargetInstance, IR::TargetWitness)
 where
     H: SpongeInfo,
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]>,
@@ -396,11 +396,11 @@ mod tests {
     use alloc::vec::Vec;
 
     use ia_core::{
-        ArgumentBody, CommittedIndexBytes, IndexedBody, IndexedInteractiveArgument,
-        IndexedInteractiveReduction, IndexedNonInteractiveArgument, IndexedNonInteractiveReduction,
-        NonInteractiveArgument, NonInteractiveReduction, Preprocessed, ProtocolBody, ProverChannel,
-        ReductionBody, VerificationError, VerificationResult, VerifierChannel,
-        VerifierKeyCommitment,
+        ArgumentCore, CommittedIndexBytes, NonInteractiveArgument, NonInteractiveReduction,
+        Preprocessed, PreprocessingCore, PreprocessingInteractiveArgument,
+        PreprocessingInteractiveReduction, PreprocessingNonInteractiveArgument,
+        PreprocessingNonInteractiveReduction, ProtocolCore, ProverChannel, ReductionCore,
+        VerificationError, VerificationResult, VerifierChannel, VerifierKeyCommitment,
     };
 
     use crate::params::Keccak;
@@ -421,18 +421,18 @@ mod tests {
         }
     }
 
-    impl ProtocolBody for DummyIndexedArg {
+    impl ProtocolCore for DummyIndexedArg {
         fn protocol_id(&self) -> impl AsRef<[u8]> {
             ia_core::pad_protocol_id(b"dummy-prepared-arg")
         }
     }
 
-    impl ArgumentBody for DummyIndexedArg {
+    impl ArgumentCore for DummyIndexedArg {
         type Instance = [u8; 1];
         type Witness = [u8; 1];
     }
 
-    impl IndexedBody for DummyIndexedArg {
+    impl PreprocessingCore for DummyIndexedArg {
         type Index = Vec<u8>;
         type ProverKey = ();
         type VerifierKey = DummyVk;
@@ -442,7 +442,7 @@ mod tests {
         }
     }
 
-    impl IndexedInteractiveArgument for DummyIndexedArg {
+    impl PreprocessingInteractiveArgument for DummyIndexedArg {
         fn prove<P: ProverChannel>(
             &self,
             ch: &mut P,
@@ -493,20 +493,20 @@ mod tests {
         }
     }
 
-    impl ProtocolBody for XorWithKey {
+    impl ProtocolCore for XorWithKey {
         fn protocol_id(&self) -> impl AsRef<[u8]> {
             ia_core::pad_protocol_id(b"xor-with-key")
         }
     }
 
-    impl ReductionBody for XorWithKey {
+    impl ReductionCore for XorWithKey {
         type SourceInstance = [u8; 1];
         type TargetInstance = [u8; 1];
         type SourceWitness = ();
         type TargetWitness = ();
     }
 
-    impl IndexedBody for XorWithKey {
+    impl PreprocessingCore for XorWithKey {
         type Index = u8;
         type ProverKey = u8;
         type VerifierKey = XorVk;
@@ -516,7 +516,7 @@ mod tests {
         }
     }
 
-    impl IndexedInteractiveReduction for XorWithKey {
+    impl PreprocessingInteractiveReduction for XorWithKey {
         fn prove<P: ProverChannel>(
             &self,
             ch: &mut P,
@@ -646,7 +646,7 @@ mod tests {
         let prepared =
             non_interactive_argument::<_, [u8; 64], _>(DummyIndexedArg, Keccak::default())
                 .prepare(&vec![]);
-        let expected = ProtocolBody::protocol_id(&DummyIndexedArg);
+        let expected = ProtocolCore::protocol_id(&DummyIndexedArg);
         assert_eq!(
             <PreparedDsfsArgument<DummyIndexedArg, [u8; 64]> as NonInteractiveArgument>::protocol_id(&prepared)
             .as_ref(),
@@ -654,13 +654,13 @@ mod tests {
         );
     }
 
-    /// Generic-consumer test: a function bound by IndexedNonInteractiveArgument
+    /// Generic-consumer test: a function bound by PreprocessingNonInteractiveArgument
     /// can pull the committed index off any preprocessed NARG without knowing
     /// its concrete type. This is the polymorphism story the trait was added
     /// for (audit trails, key persistence, etc.).
     #[test]
     fn prepared_dsfs_exposes_committed_index_via_trait_method() {
-        fn audit<N: IndexedNonInteractiveArgument>(narg: &N) -> CommittedIndexBytes {
+        fn audit<N: PreprocessingNonInteractiveArgument>(narg: &N) -> CommittedIndexBytes {
             narg.committed_index().clone()
         }
         let prepared =
@@ -671,7 +671,7 @@ mod tests {
 
     #[test]
     fn prepared_dsfs_reduction_exposes_committed_index_via_trait_method() {
-        fn audit<N: IndexedNonInteractiveReduction>(narg: &N) -> CommittedIndexBytes {
+        fn audit<N: PreprocessingNonInteractiveReduction>(narg: &N) -> CommittedIndexBytes {
             narg.committed_index().clone()
         }
         let prepared = non_interactive_reduction::<_, [u8; 64], _>(XorWithKey, Keccak::default())
@@ -703,11 +703,11 @@ mod tests {
         assert_eq!(vk_bytes(&red_prepared), vec![0x77]);
     }
 
-    /// Confirms the IndexedNonInteractive* aliases dispatch to the
+    /// Confirms the PreprocessingNonInteractive* marker traits dispatch to the
     /// Preprocessed accessors (blanket impl wiring).
     #[test]
-    fn indexed_nia_alias_pulls_keys_from_preprocessed_supertrait() {
-        fn extract<N: IndexedNonInteractiveArgument>(
+    fn preprocessing_nia_marker_pulls_keys_from_preprocessed_supertrait() {
+        fn extract<N: PreprocessingNonInteractiveArgument>(
             narg: &N,
         ) -> (&N::VerifierKey, &CommittedIndexBytes) {
             (narg.verifier_key(), narg.committed_index())
@@ -732,7 +732,7 @@ fn prepared_verify_reduction_with_sponge_and_salt<IR, H, S, const SALT_LEN: usiz
 ) -> VerificationResult<IR::TargetInstance>
 where
     H: SpongeInfo,
-    IR: IndexedInteractiveReduction,
+    IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
