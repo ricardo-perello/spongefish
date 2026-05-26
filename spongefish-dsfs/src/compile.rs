@@ -7,9 +7,9 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
+    ArgumentCore, Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
     NonInteractiveArgument, NonInteractiveReduction, PreprocessingInteractiveArgument,
-    PreprocessingInteractiveReduction,
+    PreprocessingInteractiveReduction, ProtocolCore, ReductionCore,
 };
 
 use crate::prepared::{PreparedDsfsArgument, PreparedDsfsReduction};
@@ -24,29 +24,27 @@ pub trait ByteDuplexSponge: DuplexSpongeInterface<U = u8> {}
 
 impl<T: DuplexSpongeInterface<U = u8>> ByteDuplexSponge for T {}
 
-/// DSFS compiler wrapper implementing [`NonInteractiveArgument`] for an IA.
+/// DSFS compiler wrapper implementing [`NonInteractiveArgument`] for a plain IA.
 ///
-/// Prefer constructing this with [`non_interactive_argument`].
+/// Prefer constructing this with [`plain_non_interactive_argument`].
 pub struct DsfsArgument<IA, S, H = Keccak, const SALT_LEN: usize = 0> {
     pub ia: IA,
     pub sponge: H,
     _session: PhantomData<S>,
 }
 
-/// Construct the DSFS non-interactive-argument view of an interactive body.
-///
-/// If `IA: InteractiveArgument`, the returned wrapper implements
-/// [`NonInteractiveArgument`] immediately. If `IA: PreprocessingInteractiveArgument`,
-/// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
-/// implements [`NonInteractiveArgument`] plus the preprocessing capability.
+/// Construct the DSFS non-interactive-argument view of a plain interactive body.
 #[must_use]
-pub const fn non_interactive_argument<IA, S, H>(ia: IA, sponge: H) -> DsfsArgument<IA, S, H, 0> {
+pub const fn plain_non_interactive_argument<IA, S, H>(
+    ia: IA,
+    sponge: H,
+) -> DsfsArgument<IA, S, H, 0> {
     DsfsArgument::new(ia, sponge)
 }
 
-/// Construct a salted DSFS non-interactive-argument view.
+/// Construct a salted DSFS non-interactive-argument view of a plain interactive body.
 #[must_use]
-pub const fn non_interactive_argument_with_salt<IA, S, H, const SALT_LEN: usize>(
+pub const fn plain_non_interactive_argument_with_salt<IA, S, H, const SALT_LEN: usize>(
     ia: IA,
     sponge: H,
 ) -> DsfsArgument<IA, S, H, SALT_LEN> {
@@ -64,26 +62,21 @@ impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN> {
     }
 }
 
-/// Inherent methods that turn a [`DsfsArgument`] over an
-/// [`PreprocessingInteractiveArgument`] into a [`PreparedDsfsArgument`] by either running the indexer or accepting
-/// externally-stored preprocessing keys. The committed verifier index is always
-/// derived from `vk`.
-impl<IA, S, H, const SALT_LEN: usize> DsfsArgument<IA, S, H, SALT_LEN>
+impl<IA, S, H, const SALT_LEN: usize> ProtocolCore for DsfsArgument<IA, S, H, SALT_LEN>
 where
-    IA: PreprocessingInteractiveArgument,
+    IA: InteractiveArgument,
 {
-    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
-        let (pk, vk) = self.ia.index(ix);
-        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
+    fn protocol_id(&self) -> impl AsRef<[u8]> {
+        self.ia.protocol_id()
     }
+}
 
-    pub fn with_keys(
-        self,
-        pk: IA::ProverKey,
-        vk: IA::VerifierKey,
-    ) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
-        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
-    }
+impl<IA, S, H, const SALT_LEN: usize> ArgumentCore for DsfsArgument<IA, S, H, SALT_LEN>
+where
+    IA: InteractiveArgument,
+{
+    type Instance = IA::Instance;
+    type Witness = IA::Witness;
 }
 
 impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument for DsfsArgument<IA, S, H, SALT_LEN>
@@ -95,12 +88,6 @@ where
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
 {
     type Session = S;
-    type Instance = IA::Instance;
-    type Witness = IA::Witness;
-
-    fn protocol_id(&self) -> impl AsRef<[u8]> {
-        self.ia.protocol_id()
-    }
 
     fn prove(
         &self,
@@ -133,6 +120,65 @@ where
     }
 }
 
+/// DSFS compiler wrapper for a preprocessing argument before keys are prepared.
+///
+/// This wrapper deliberately does not implement [`NonInteractiveArgument`].
+/// Call [`prepare`](Self::prepare) or [`with_keys`](Self::with_keys) to obtain a
+/// [`PreparedDsfsArgument`], which then implements
+/// [`NonInteractiveArgument`] plus the preprocessing capability.
+pub struct UnpreparedDsfsArgument<IA, S, H = Keccak, const SALT_LEN: usize = 0> {
+    ia: IA,
+    sponge: H,
+    _session: PhantomData<S>,
+}
+
+/// Construct an unprepared DSFS non-interactive-argument view of a preprocessing body.
+#[must_use]
+pub const fn preprocessing_non_interactive_argument<IA, S, H>(
+    ia: IA,
+    sponge: H,
+) -> UnpreparedDsfsArgument<IA, S, H, 0> {
+    UnpreparedDsfsArgument::new(ia, sponge)
+}
+
+/// Construct a salted unprepared DSFS non-interactive-argument view of a preprocessing body.
+#[must_use]
+pub const fn preprocessing_non_interactive_argument_with_salt<IA, S, H, const SALT_LEN: usize>(
+    ia: IA,
+    sponge: H,
+) -> UnpreparedDsfsArgument<IA, S, H, SALT_LEN> {
+    UnpreparedDsfsArgument::new(ia, sponge)
+}
+
+impl<IA, S, H, const SALT_LEN: usize> UnpreparedDsfsArgument<IA, S, H, SALT_LEN> {
+    #[must_use]
+    pub const fn new(ia: IA, sponge: H) -> Self {
+        Self {
+            ia,
+            sponge,
+            _session: PhantomData,
+        }
+    }
+}
+
+impl<IA, S, H, const SALT_LEN: usize> UnpreparedDsfsArgument<IA, S, H, SALT_LEN>
+where
+    IA: PreprocessingInteractiveArgument,
+{
+    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
+        let (pk, vk) = self.ia.index(ix);
+        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
+    }
+
+    pub fn with_keys(
+        self,
+        pk: IA::ProverKey,
+        vk: IA::VerifierKey,
+    ) -> PreparedDsfsArgument<IA, S, H, SALT_LEN> {
+        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.sponge)
+    }
+}
+
 /// DSFS compiler wrapper implementing [`NonInteractiveReduction`] for an IR.
 pub struct DsfsReduction<IR, S, H = Keccak, const SALT_LEN: usize = 0> {
     pub ir: IR,
@@ -151,44 +197,41 @@ impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN> {
     }
 }
 
-/// Construct the DSFS non-interactive-reduction view of an interactive body.
-///
-/// If `IR: InteractiveReduction`, the returned wrapper implements
-/// [`NonInteractiveReduction`] immediately. If `IR: PreprocessingInteractiveReduction`,
-/// call `.prepare(&ix)` or `.with_keys(pk, vk)` first; the prepared wrapper then
-/// implements [`NonInteractiveReduction`] plus the preprocessing capability.
+/// Construct the DSFS non-interactive-reduction view of a plain interactive body.
 #[must_use]
-pub const fn non_interactive_reduction<IR, S, H>(ir: IR, sponge: H) -> DsfsReduction<IR, S, H, 0> {
+pub const fn plain_non_interactive_reduction<IR, S, H>(
+    ir: IR,
+    sponge: H,
+) -> DsfsReduction<IR, S, H, 0> {
     DsfsReduction::new(ir, sponge)
 }
 
-/// Construct a salted DSFS non-interactive-reduction view.
+/// Construct a salted DSFS non-interactive-reduction view of a plain interactive body.
 #[must_use]
-pub const fn non_interactive_reduction_with_salt<IR, S, H, const SALT_LEN: usize>(
+pub const fn plain_non_interactive_reduction_with_salt<IR, S, H, const SALT_LEN: usize>(
     ir: IR,
     sponge: H,
 ) -> DsfsReduction<IR, S, H, SALT_LEN> {
     DsfsReduction::new(ir, sponge)
 }
 
-/// Inherent methods that turn a [`DsfsReduction`] over an
-/// [`PreprocessingInteractiveReduction`] into a [`PreparedDsfsReduction`].
-impl<IR, S, H, const SALT_LEN: usize> DsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, H, const SALT_LEN: usize> ProtocolCore for DsfsReduction<IR, S, H, SALT_LEN>
 where
-    IR: PreprocessingInteractiveReduction,
+    IR: InteractiveReduction,
 {
-    pub fn prepare(self, ix: &IR::Index) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
-        let (pk, vk) = self.ir.index(ix);
-        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
+    fn protocol_id(&self) -> impl AsRef<[u8]> {
+        self.ir.protocol_id()
     }
+}
 
-    pub fn with_keys(
-        self,
-        pk: IR::ProverKey,
-        vk: IR::VerifierKey,
-    ) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
-        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
-    }
+impl<IR, S, H, const SALT_LEN: usize> ReductionCore for DsfsReduction<IR, S, H, SALT_LEN>
+where
+    IR: InteractiveReduction,
+{
+    type SourceInstance = IR::SourceInstance;
+    type TargetInstance = IR::TargetInstance;
+    type SourceWitness = IR::SourceWitness;
+    type TargetWitness = IR::TargetWitness;
 }
 
 impl<IR, S, H, const SALT_LEN: usize> NonInteractiveReduction for DsfsReduction<IR, S, H, SALT_LEN>
@@ -200,14 +243,6 @@ where
     [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
 {
     type Session = S;
-    type SourceInstance = IR::SourceInstance;
-    type TargetInstance = IR::TargetInstance;
-    type SourceWitness = IR::SourceWitness;
-    type TargetWitness = IR::TargetWitness;
-
-    fn protocol_id(&self) -> impl AsRef<[u8]> {
-        self.ir.protocol_id()
-    }
 
     fn prove(
         &self,
@@ -237,6 +272,65 @@ where
             instance,
             proof.as_bytes(),
         )
+    }
+}
+
+/// DSFS compiler wrapper for a preprocessing reduction before keys are prepared.
+///
+/// This wrapper deliberately does not implement [`NonInteractiveReduction`].
+/// Call [`prepare`](Self::prepare) or [`with_keys`](Self::with_keys) to obtain a
+/// [`PreparedDsfsReduction`], which then implements
+/// [`NonInteractiveReduction`] plus the preprocessing capability.
+pub struct UnpreparedDsfsReduction<IR, S, H = Keccak, const SALT_LEN: usize = 0> {
+    ir: IR,
+    sponge: H,
+    _session: PhantomData<S>,
+}
+
+/// Construct an unprepared DSFS non-interactive-reduction view of a preprocessing body.
+#[must_use]
+pub const fn preprocessing_non_interactive_reduction<IR, S, H>(
+    ir: IR,
+    sponge: H,
+) -> UnpreparedDsfsReduction<IR, S, H, 0> {
+    UnpreparedDsfsReduction::new(ir, sponge)
+}
+
+/// Construct a salted unprepared DSFS non-interactive-reduction view of a preprocessing body.
+#[must_use]
+pub const fn preprocessing_non_interactive_reduction_with_salt<IR, S, H, const SALT_LEN: usize>(
+    ir: IR,
+    sponge: H,
+) -> UnpreparedDsfsReduction<IR, S, H, SALT_LEN> {
+    UnpreparedDsfsReduction::new(ir, sponge)
+}
+
+impl<IR, S, H, const SALT_LEN: usize> UnpreparedDsfsReduction<IR, S, H, SALT_LEN> {
+    #[must_use]
+    pub const fn new(ir: IR, sponge: H) -> Self {
+        Self {
+            ir,
+            sponge,
+            _session: PhantomData,
+        }
+    }
+}
+
+impl<IR, S, H, const SALT_LEN: usize> UnpreparedDsfsReduction<IR, S, H, SALT_LEN>
+where
+    IR: PreprocessingInteractiveReduction,
+{
+    pub fn prepare(self, ix: &IR::Index) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
+        let (pk, vk) = self.ir.index(ix);
+        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
+    }
+
+    pub fn with_keys(
+        self,
+        pk: IR::ProverKey,
+        vk: IR::VerifierKey,
+    ) -> PreparedDsfsReduction<IR, S, H, SALT_LEN> {
+        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.sponge)
     }
 }
 

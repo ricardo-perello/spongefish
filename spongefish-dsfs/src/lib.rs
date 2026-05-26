@@ -16,10 +16,16 @@
 //!
 //! The semantic constructors are the byte-oriented convenience API:
 //!
-//! - [`non_interactive_argument`] builds a DSFS wrapper for an
-//!   `InteractiveArgument`.
-//! - [`non_interactive_reduction`] builds a DSFS wrapper for an
-//!   `InteractiveReduction`.
+//! - [`plain_non_interactive_argument`] builds a DSFS wrapper for a plain
+//!   `InteractiveArgument` and immediately exposes `prove` / `verify`.
+//! - [`plain_non_interactive_reduction`] builds a DSFS wrapper for a plain
+//!   `InteractiveReduction` and immediately exposes `prove` / `verify`.
+//! - [`preprocessing_non_interactive_argument`] builds an unprepared DSFS
+//!   wrapper for a `PreprocessingInteractiveArgument`; call `.prepare(&ix)` or
+//!   `.with_keys(pk, vk)` before proving or verifying.
+//! - [`preprocessing_non_interactive_reduction`] builds an unprepared DSFS
+//!   wrapper for a `PreprocessingInteractiveReduction`; call `.prepare(&ix)` or
+//!   `.with_keys(pk, vk)` before proving or verifying.
 //! - `*_with_salt` constructor variants add an explicit prover-chosen salt
 //!   message before protocol execution.
 //! - The sponge argument selects a byte-oriented sponge such as [`Keccak`] or
@@ -29,9 +35,9 @@
 //! exposes the raw DSFS proof string expected by the verifier functions.
 //! Verification always checks EOF, so trailing proof bytes are rejected.
 //!
-//! The returned wrappers implement the abstract non-interactive traits from
-//! `ia-core`. When constructed around an indexed body, call `.prepare(&ix)` or
-//! `.with_keys(pk, vk)` before proving or verifying.
+//! Plain wrappers implement the abstract non-interactive traits from `ia-core`
+//! immediately. Prepared preprocessing wrappers implement those traits after
+//! key generation.
 //!
 //! Transcript invariants maintained here:
 //!
@@ -53,8 +59,11 @@ mod prepared;
 pub use channel::TranscriptSponge;
 pub use channel::{SpongeProver, SpongeVerifier};
 pub use compile::{
-    non_interactive_argument, non_interactive_argument_with_salt, non_interactive_reduction,
-    non_interactive_reduction_with_salt, ByteDuplexSponge, DsfsArgument, DsfsReduction,
+    plain_non_interactive_argument, plain_non_interactive_argument_with_salt,
+    plain_non_interactive_reduction, plain_non_interactive_reduction_with_salt,
+    preprocessing_non_interactive_argument, preprocessing_non_interactive_argument_with_salt,
+    preprocessing_non_interactive_reduction, preprocessing_non_interactive_reduction_with_salt,
+    ByteDuplexSponge, DsfsArgument, DsfsReduction, UnpreparedDsfsArgument, UnpreparedDsfsReduction,
 };
 pub use narg_security::{
     reduction_security_for_source_bound, reduction_security_for_source_bound_with,
