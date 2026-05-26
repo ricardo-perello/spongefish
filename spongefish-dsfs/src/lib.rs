@@ -28,7 +28,7 @@
 //!   `.with_keys(pk, vk)` before proving or verifying.
 //! - `*_with_salt` constructor variants add an explicit prover-chosen salt
 //!   message before protocol execution.
-//! - The sponge argument selects a byte-oriented sponge such as [`Keccak`] or
+//! - The `duplex_sponge` argument selects a byte-oriented sponge such as [`Keccak`] or
 //!   [`StdHash`].
 //!
 //! Prover functions return [`ia_core::NargProof`]. Its `as_bytes()` method

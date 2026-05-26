@@ -29,7 +29,7 @@ pub type Keccak = spongefish::instantiations::Keccak;
 
 /// Spongefish’s default FS transcript hash: SHAKE128 in XOF duplex mode (`std_prover` / `std_verifier`).
 ///
-/// Use as the sponge argument to [`crate::plain_non_interactive_argument`] or
+/// Use as the duplex-sponge argument to [`crate::plain_non_interactive_argument`] or
 /// [`crate::plain_non_interactive_reduction`] when you need byte-compatibility with
 /// spongefish / σ-proofs `Nizk` transcript defaults.
 pub type StdHash = spongefish::StdHash;

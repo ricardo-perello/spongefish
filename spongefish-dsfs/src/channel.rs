@@ -4,11 +4,11 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
+use ia_core::{Deserialize, ProverChannel, VerifierChannel};
 use spongefish::{
     Decoding, DomainSeparator, DuplexSpongeInterface, Encoding, NargDeserialize, NargSerialize,
     ProverState, StdHash, VerificationResult, VerifierState,
 };
-use ia_core::{Deserialize, ProverChannel, VerifierChannel};
 
 use crate::params::{Keccak, SpongeInfo};
 
@@ -101,16 +101,16 @@ impl TranscriptSponge for StdHash {
 
 /// Wraps `spongefish::ProverState` as an ia-core `ProverChannel`.
 ///
-/// Generic over the duplex sponge `H` used for the Fiat–Shamir transcript.
+/// Generic over the duplex sponge `DS` used for the Fiat–Shamir transcript.
 /// Defaults to [`Keccak`] (Argus standard); use [`crate::params::StdHash`] for
 /// compatibility with spongefish `std_prover` / `std_verifier` (SHAKE128 XOF).
-pub struct SpongeProver<H: DuplexSpongeInterface = Keccak> {
-    pub state: ProverState<H>,
+pub struct SpongeProver<DS: DuplexSpongeInterface = Keccak> {
+    pub state: ProverState<DS>,
 }
 
-impl<H: DuplexSpongeInterface> SpongeProver<H> {
+impl<DS: DuplexSpongeInterface> SpongeProver<DS> {
     #[must_use]
-    pub const fn new(state: ProverState<H>) -> Self {
+    pub const fn new(state: ProverState<DS>) -> Self {
         Self { state }
     }
 
@@ -123,44 +123,44 @@ impl<H: DuplexSpongeInterface> SpongeProver<H> {
     /// Absorb a **public** message into the transcript (Fiat–Shamir) without appending to the NARG string.
     ///
     /// Matches spongefish `ProverState::public_message` (e.g. σ-proofs batchable commitments).
-    pub fn public_message<T: Encoding<[H::U]> + ?Sized>(&mut self, msg: &T) {
+    pub fn public_message<T: Encoding<[DS::U]> + ?Sized>(&mut self, msg: &T) {
         self.state.public_message(msg);
     }
 
     /// Squeeze a verifier challenge from the duplex sponge.
-    pub fn verifier_message<VM: Decoding<[H::U]>>(&mut self) -> VM {
+    pub fn verifier_message<VM: Decoding<[DS::U]>>(&mut self) -> VM {
         self.state.verifier_message()
     }
 }
 
-impl<H: DuplexSpongeInterface> ProverChannel<H::U> for SpongeProver<H> {
-    fn send_prover_message<PM: Encoding<[H::U]> + NargSerialize>(&mut self, msg: &PM) {
+impl<DS: DuplexSpongeInterface> ProverChannel<DS::U> for SpongeProver<DS> {
+    fn send_prover_message<PM: Encoding<[DS::U]> + NargSerialize>(&mut self, msg: &PM) {
         self.state.prover_message(msg);
     }
 
-    fn read_verifier_message<VM: Decoding<[H::U]>>(&mut self) -> VM {
+    fn read_verifier_message<VM: Decoding<[DS::U]>>(&mut self) -> VM {
         self.state.verifier_message()
     }
 }
 
 /// Wraps `spongefish::VerifierState` as an ia-core `VerifierChannel`.
-pub struct SpongeVerifier<'a, H: DuplexSpongeInterface = Keccak> {
-    pub state: VerifierState<'a, H>,
+pub struct SpongeVerifier<'a, DS: DuplexSpongeInterface = Keccak> {
+    pub state: VerifierState<'a, DS>,
 }
 
-impl<'a, H: DuplexSpongeInterface> SpongeVerifier<'a, H> {
+impl<'a, DS: DuplexSpongeInterface> SpongeVerifier<'a, DS> {
     #[must_use]
-    pub const fn new(state: VerifierState<'a, H>) -> Self {
+    pub const fn new(state: VerifierState<'a, DS>) -> Self {
         Self { state }
     }
 
     /// Absorb a public message without consuming the NARG cursor.
-    pub fn public_message<T: Encoding<[H::U]> + ?Sized>(&mut self, msg: &T) {
+    pub fn public_message<T: Encoding<[DS::U]> + ?Sized>(&mut self, msg: &T) {
         self.state.public_message(msg);
     }
 
     /// Read an ordered list of prover messages from the NARG string and absorb each one.
-    pub fn prover_messages_vec<T: Encoding<[H::U]> + NargDeserialize>(
+    pub fn prover_messages_vec<T: Encoding<[DS::U]> + NargDeserialize>(
         &mut self,
         len: usize,
     ) -> VerificationResult<Vec<T>> {
@@ -168,7 +168,7 @@ impl<'a, H: DuplexSpongeInterface> SpongeVerifier<'a, H> {
     }
 
     /// Squeeze a verifier challenge.
-    pub fn verifier_message<VM: Decoding<[H::U]>>(&mut self) -> VM {
+    pub fn verifier_message<VM: Decoding<[DS::U]>>(&mut self) -> VM {
         self.state.verifier_message()
     }
 
@@ -177,8 +177,8 @@ impl<'a, H: DuplexSpongeInterface> SpongeVerifier<'a, H> {
     }
 }
 
-impl<H: DuplexSpongeInterface> VerifierChannel<H::U> for SpongeVerifier<'_, H> {
-    fn read_prover_message<PM: Encoding<[H::U]> + Deserialize>(
+impl<DS: DuplexSpongeInterface> VerifierChannel<DS::U> for SpongeVerifier<'_, DS> {
+    fn read_prover_message<PM: Encoding<[DS::U]> + Deserialize>(
         &mut self,
     ) -> ia_core::VerificationResult<PM> {
         self.state
@@ -186,7 +186,7 @@ impl<H: DuplexSpongeInterface> VerifierChannel<H::U> for SpongeVerifier<'_, H> {
             .map_err(|_| ia_core::VerificationError)
     }
 
-    fn send_verifier_message<VM: Decoding<[H::U]>>(&mut self) -> VM {
+    fn send_verifier_message<VM: Decoding<[DS::U]>>(&mut self) -> VM {
         self.state.verifier_message()
     }
 }

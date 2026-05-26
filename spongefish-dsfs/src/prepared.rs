@@ -40,30 +40,35 @@ use crate::params::{Keccak, SpongeInfo};
 pub struct PreparedDsfsArgument<
     IA: PreprocessingInteractiveArgument,
     S,
-    H = Keccak,
+    DS = Keccak,
     const SALT_LEN: usize = 0,
 > {
     ia: IA,
     pk: IA::ProverKey,
     vk: IA::VerifierKey,
     committed_index: CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     _session: PhantomData<S>,
 }
 
-impl<IA: PreprocessingInteractiveArgument, S, H, const SALT_LEN: usize>
-    PreparedDsfsArgument<IA, S, H, SALT_LEN>
+impl<IA: PreprocessingInteractiveArgument, S, DS, const SALT_LEN: usize>
+    PreparedDsfsArgument<IA, S, DS, SALT_LEN>
 {
     /// Construct from an already-keyed indexed body. The committed index is
     /// derived from `vk` (Invariant 6).
-    pub(crate) fn from_keys(ia: IA, pk: IA::ProverKey, vk: IA::VerifierKey, sponge: H) -> Self {
+    pub(crate) fn from_keys(
+        ia: IA,
+        pk: IA::ProverKey,
+        vk: IA::VerifierKey,
+        duplex_sponge: DS,
+    ) -> Self {
         let committed_index = vk.committed_index();
         Self {
             ia,
             pk,
             vk,
             committed_index,
-            sponge,
+            duplex_sponge,
             _session: PhantomData,
         }
     }
@@ -85,7 +90,7 @@ impl<IA: PreprocessingInteractiveArgument, S, H, const SALT_LEN: usize>
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> ProtocolCore for PreparedDsfsArgument<IA, S, H, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> ProtocolCore for PreparedDsfsArgument<IA, S, DS, SALT_LEN>
 where
     IA: PreprocessingInteractiveArgument,
 {
@@ -94,7 +99,7 @@ where
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> ArgumentCore for PreparedDsfsArgument<IA, S, H, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> ArgumentCore for PreparedDsfsArgument<IA, S, DS, SALT_LEN>
 where
     IA: PreprocessingInteractiveArgument,
 {
@@ -102,14 +107,14 @@ where
     type Witness = IA::Witness;
 }
 
-impl<IA, S, H, const SALT_LEN: usize> NonInteractiveArgument
-    for PreparedDsfsArgument<IA, S, H, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveArgument
+    for PreparedDsfsArgument<IA, S, DS, SALT_LEN>
 where
-    H: SpongeInfo + Clone,
+    DS: SpongeInfo + Clone,
     IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
 {
     type Session = S;
 
@@ -119,11 +124,11 @@ where
         instance: &Self::Instance,
         witness: &Self::Witness,
     ) -> NargProof {
-        prepared_prove_with_sponge_and_salt::<IA, H, S, SALT_LEN>(
+        prepared_prove_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
             &self.ia,
             &self.pk,
             &self.committed_index,
-            self.sponge.clone(),
+            self.duplex_sponge.clone(),
             session,
             instance,
             witness,
@@ -136,11 +141,11 @@ where
         instance: &Self::Instance,
         proof: &NargProof,
     ) -> VerificationResult<()> {
-        prepared_verify_with_sponge_and_salt::<IA, H, S, SALT_LEN>(
+        prepared_verify_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
             &self.ia,
             &self.vk,
             &self.committed_index,
-            self.sponge.clone(),
+            self.duplex_sponge.clone(),
             session,
             instance,
             proof.as_bytes(),
@@ -148,7 +153,7 @@ where
     }
 }
 
-impl<IA, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsArgument<IA, S, H, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> Preprocessed for PreparedDsfsArgument<IA, S, DS, SALT_LEN>
 where
     IA: PreprocessingInteractiveArgument,
 {
@@ -176,28 +181,33 @@ where
 pub struct PreparedDsfsReduction<
     IR: PreprocessingInteractiveReduction,
     S,
-    H = Keccak,
+    DS = Keccak,
     const SALT_LEN: usize = 0,
 > {
     ir: IR,
     pk: IR::ProverKey,
     vk: IR::VerifierKey,
     committed_index: CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     _session: PhantomData<S>,
 }
 
-impl<IR: PreprocessingInteractiveReduction, S, H, const SALT_LEN: usize>
-    PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR: PreprocessingInteractiveReduction, S, DS, const SALT_LEN: usize>
+    PreparedDsfsReduction<IR, S, DS, SALT_LEN>
 {
-    pub(crate) fn from_keys(ir: IR, pk: IR::ProverKey, vk: IR::VerifierKey, sponge: H) -> Self {
+    pub(crate) fn from_keys(
+        ir: IR,
+        pk: IR::ProverKey,
+        vk: IR::VerifierKey,
+        duplex_sponge: DS,
+    ) -> Self {
         let committed_index = vk.committed_index();
         Self {
             ir,
             pk,
             vk,
             committed_index,
-            sponge,
+            duplex_sponge,
             _session: PhantomData,
         }
     }
@@ -219,7 +229,7 @@ impl<IR: PreprocessingInteractiveReduction, S, H, const SALT_LEN: usize>
     }
 }
 
-impl<IR, S, H, const SALT_LEN: usize> ProtocolCore for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, DS, const SALT_LEN: usize> ProtocolCore for PreparedDsfsReduction<IR, S, DS, SALT_LEN>
 where
     IR: PreprocessingInteractiveReduction,
 {
@@ -228,7 +238,7 @@ where
     }
 }
 
-impl<IR, S, H, const SALT_LEN: usize> ReductionCore for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, DS, const SALT_LEN: usize> ReductionCore for PreparedDsfsReduction<IR, S, DS, SALT_LEN>
 where
     IR: PreprocessingInteractiveReduction,
 {
@@ -238,14 +248,14 @@ where
     type TargetWitness = IR::TargetWitness;
 }
 
-impl<IR, S, H, const SALT_LEN: usize> NonInteractiveReduction
-    for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveReduction
+    for PreparedDsfsReduction<IR, S, DS, SALT_LEN>
 where
-    H: SpongeInfo + Clone,
+    DS: SpongeInfo + Clone,
     IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
 {
     type Session = S;
 
@@ -255,11 +265,11 @@ where
         instance: &Self::SourceInstance,
         witness: &Self::SourceWitness,
     ) -> (NargProof, Self::TargetInstance, Self::TargetWitness) {
-        prepared_prove_reduction_with_sponge_and_salt::<IR, H, S, SALT_LEN>(
+        prepared_prove_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
             &self.ir,
             &self.pk,
             &self.committed_index,
-            self.sponge.clone(),
+            self.duplex_sponge.clone(),
             session,
             instance,
             witness,
@@ -272,11 +282,11 @@ where
         instance: &Self::SourceInstance,
         proof: &NargProof,
     ) -> VerificationResult<Self::TargetInstance> {
-        prepared_verify_reduction_with_sponge_and_salt::<IR, H, S, SALT_LEN>(
+        prepared_verify_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
             &self.ir,
             &self.vk,
             &self.committed_index,
-            self.sponge.clone(),
+            self.duplex_sponge.clone(),
             session,
             instance,
             proof.as_bytes(),
@@ -284,7 +294,7 @@ where
     }
 }
 
-impl<IR, S, H, const SALT_LEN: usize> Preprocessed for PreparedDsfsReduction<IR, S, H, SALT_LEN>
+impl<IR, S, DS, const SALT_LEN: usize> Preprocessed for PreparedDsfsReduction<IR, S, DS, SALT_LEN>
 where
     IR: PreprocessingInteractiveReduction,
 {
@@ -308,32 +318,32 @@ where
 // Indexed DSFS runners
 // ---------------------------------------------------------------------------
 
-fn prepared_prove_with_sponge_and_salt<IA, H, S, const SALT_LEN: usize>(
+fn prepared_prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     pk: &IA::ProverKey,
     committed_index: &CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     session: &S,
     instance: &IA::Instance,
     witness: &IA::Witness,
 ) -> NargProof
 where
-    H: SpongeInfo,
+    DS: SpongeInfo,
     IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
     let session_bytes = session.encode();
     let public_input = IndexedInstanceRef::new(committed_index, instance);
     let domsep = DomainSeparator::derive(
         ia.protocol_id().as_ref(),
-        H::SPONGE_INFO,
+        DS::SPONGE_INFO,
         session_bytes.as_ref(),
     )
     .instance(&public_input);
 
-    let mut prover_ch = SpongeProver::new(domsep.to_prover(sponge));
+    let mut prover_ch = SpongeProver::new(domsep.to_prover(duplex_sponge));
     let mut salt = [0u8; SALT_LEN];
     prover_ch.state.rng().fill_bytes(&mut salt);
     prover_ch.state.prover_message(&salt);
@@ -341,32 +351,32 @@ where
     NargProof::from_bytes(prover_ch.narg_string().to_vec())
 }
 
-fn prepared_verify_with_sponge_and_salt<IA, H, S, const SALT_LEN: usize>(
+fn prepared_verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     vk: &IA::VerifierKey,
     committed_index: &CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     session: &S,
     instance: &IA::Instance,
     proof: &[u8],
 ) -> VerificationResult<()>
 where
-    H: SpongeInfo,
+    DS: SpongeInfo,
     IA: PreprocessingInteractiveArgument,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
 {
     let session_bytes = session.encode();
     let public_input = IndexedInstanceRef::new(committed_index, instance);
     let domsep = DomainSeparator::derive(
         ia.protocol_id().as_ref(),
-        H::SPONGE_INFO,
+        DS::SPONGE_INFO,
         session_bytes.as_ref(),
     )
     .instance(&public_input);
 
-    let mut verifier_ch = SpongeVerifier::new(domsep.to_verifier(sponge, proof));
+    let mut verifier_ch = SpongeVerifier::new(domsep.to_verifier(duplex_sponge, proof));
     let _salt: [u8; SALT_LEN] = verifier_ch
         .state
         .prover_message()
@@ -375,32 +385,32 @@ where
     verifier_ch.state.check_eof().map_err(|_| VerificationError)
 }
 
-fn prepared_prove_reduction_with_sponge_and_salt<IR, H, S, const SALT_LEN: usize>(
+fn prepared_prove_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
     ir: &IR,
     pk: &IR::ProverKey,
     committed_index: &CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     session: &S,
     instance: &IR::SourceInstance,
     witness: &IR::SourceWitness,
 ) -> (NargProof, IR::TargetInstance, IR::TargetWitness)
 where
-    H: SpongeInfo,
+    DS: SpongeInfo,
     IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
     let session_bytes = session.encode();
     let public_input = IndexedInstanceRef::new(committed_index, instance);
     let domsep = DomainSeparator::derive(
         ir.protocol_id().as_ref(),
-        H::SPONGE_INFO,
+        DS::SPONGE_INFO,
         session_bytes.as_ref(),
     )
     .instance(&public_input);
 
-    let mut prover_ch = SpongeProver::new(domsep.to_prover(sponge));
+    let mut prover_ch = SpongeProver::new(domsep.to_prover(duplex_sponge));
     let mut salt = [0u8; SALT_LEN];
     prover_ch.state.rng().fill_bytes(&mut salt);
     prover_ch.state.prover_message(&salt);
@@ -476,7 +486,7 @@ mod tests {
             _: &Self::Instance,
             witness: &Self::Witness,
         ) {
-            // Send witness, squeeze a challenge from the sponge, echo it back.
+            // Send witness, squeeze a challenge from the duplex sponge, echo it back.
             // The echo lets the verifier detect any transcript-state divergence
             // (e.g., a different committed index) by checking that its squeezed
             // challenge matches the one the prover absorbed.
@@ -779,32 +789,32 @@ mod tests {
     }
 }
 
-fn prepared_verify_reduction_with_sponge_and_salt<IR, H, S, const SALT_LEN: usize>(
+fn prepared_verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
     ir: &IR,
     vk: &IR::VerifierKey,
     committed_index: &CommittedIndexBytes,
-    sponge: H,
+    duplex_sponge: DS,
     session: &S,
     instance: &IR::SourceInstance,
     proof: &[u8],
 ) -> VerificationResult<IR::TargetInstance>
 where
-    H: SpongeInfo,
+    DS: SpongeInfo,
     IR: PreprocessingInteractiveReduction,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[H::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
 {
     let session_bytes = session.encode();
     let public_input = IndexedInstanceRef::new(committed_index, instance);
     let domsep = DomainSeparator::derive(
         ir.protocol_id().as_ref(),
-        H::SPONGE_INFO,
+        DS::SPONGE_INFO,
         session_bytes.as_ref(),
     )
     .instance(&public_input);
 
-    let mut verifier_ch = SpongeVerifier::new(domsep.to_verifier(sponge, proof));
+    let mut verifier_ch = SpongeVerifier::new(domsep.to_verifier(duplex_sponge, proof));
     let _salt: [u8; SALT_LEN] = verifier_ch
         .state
         .prover_message()
