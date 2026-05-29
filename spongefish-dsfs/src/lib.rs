@@ -20,12 +20,11 @@
 //!   `InteractiveArgument` and immediately exposes `prove` / `verify`.
 //! - [`plain_non_interactive_reduction`] builds a DSFS wrapper for a plain
 //!   `InteractiveReduction` and immediately exposes `prove` / `verify`.
-//! - [`preprocessing_non_interactive_argument`] builds an unprepared DSFS
-//!   wrapper for a `PreprocessingInteractiveArgument`; call `.prepare(&ix)` or
-//!   `.with_keys(pk, vk)` before proving or verifying.
-//! - [`preprocessing_non_interactive_reduction`] builds an unprepared DSFS
-//!   wrapper for a `PreprocessingInteractiveReduction`; call `.prepare(&ix)` or
-//!   `.with_keys(pk, vk)` before proving or verifying.
+//! - [`preprocessing_non_interactive_argument`] builds a stateless DSFS wrapper
+//!   for a `PreprocessingInteractiveArgument`; call `.preprocess(&ix)` to get a
+//!   `ProvingKey` + verifier key, then pass the relevant key to `prove` / `verify`.
+//! - [`preprocessing_non_interactive_reduction`] builds a stateless DSFS wrapper
+//!   for a `PreprocessingInteractiveReduction`; same `preprocess` + keys-as-inputs shape.
 //! - `*_with_salt` constructor variants add an explicit prover-chosen salt
 //!   message before protocol execution.
 //! - The `duplex_sponge` argument selects a byte-oriented sponge such as [`Keccak`] or
@@ -35,9 +34,10 @@
 //! exposes the raw DSFS proof string expected by the verifier functions.
 //! Verification always checks EOF, so trailing proof bytes are rejected.
 //!
-//! Plain wrappers implement the abstract non-interactive traits from `ia-core`
-//! immediately. Prepared preprocessing wrappers implement those traits after
-//! key generation.
+//! Plain wrappers implement `NonInteractiveArgument` / `NonInteractiveReduction`.
+//! Preprocessing wrappers are stateless and implement
+//! `PreprocessingNonInteractiveArgument` / `PreprocessingNonInteractiveReduction`
+//! (keys are inputs to `prove` / `verify`, not stored on the wrapper).
 //!
 //! Transcript invariants maintained here:
 //!
@@ -54,7 +54,7 @@ mod channel;
 mod compile;
 mod narg_security;
 mod params;
-mod prepared;
+mod runners;
 
 pub use channel::TranscriptSponge;
 pub use channel::{SpongeProver, SpongeVerifier};
@@ -63,7 +63,8 @@ pub use compile::{
     plain_non_interactive_reduction, plain_non_interactive_reduction_with_salt,
     preprocessing_non_interactive_argument, preprocessing_non_interactive_argument_with_salt,
     preprocessing_non_interactive_reduction, preprocessing_non_interactive_reduction_with_salt,
-    ByteDuplexSponge, DsfsArgument, DsfsReduction, UnpreparedDsfsArgument, UnpreparedDsfsReduction,
+    ByteDuplexSponge, DsfsArgument, DsfsReduction, PreprocessedDsfsArgument,
+    PreprocessedDsfsReduction,
 };
 pub use narg_security::{
     reduction_security_for_source_bound, reduction_security_for_source_bound_with,
@@ -75,4 +76,3 @@ pub use params::{
     DuplexSpongeParamsExt, Keccak, SpongeInfo, SpongeParams, StdHash, STD_HASH_SPONGE_PARAMS,
     STD_SPONGE_PARAMS,
 };
-pub use prepared::{PreparedDsfsArgument, PreparedDsfsReduction};

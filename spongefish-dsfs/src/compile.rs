@@ -8,11 +8,16 @@ use rand::RngCore;
 
 use ia_core::{
     ArgumentCore, Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
-    NonInteractiveArgument, NonInteractiveReduction, PreprocessingInteractiveArgument,
-    PreprocessingInteractiveReduction, ProtocolCore, ReductionCore,
+    NonInteractiveArgument, NonInteractiveReduction, PreprocessingCore,
+    PreprocessingInteractiveArgument, PreprocessingInteractiveReduction,
+    PreprocessingNonInteractiveArgument, PreprocessingNonInteractiveReduction, ProtocolCore,
+    ProvingKey, ReductionCore, VerifierKeyCommitment,
 };
 
-use crate::prepared::{PreparedDsfsArgument, PreparedDsfsReduction};
+use crate::runners::{
+    prepared_prove_reduction_with_sponge_and_salt, prepared_prove_with_sponge_and_salt,
+    prepared_verify_reduction_with_sponge_and_salt, prepared_verify_with_sponge_and_salt,
+};
 
 use spongefish::{DomainSeparator, DuplexSpongeInterface};
 
@@ -120,37 +125,37 @@ where
     }
 }
 
-/// DSFS compiler wrapper for a preprocessing argument before keys are prepared.
+/// DSFS compiler wrapper implementing [`PreprocessingNonInteractiveArgument`] for a
+/// preprocessing interactive body.
 ///
-/// This wrapper deliberately does not implement [`NonInteractiveArgument`].
-/// Call [`prepare`](Self::prepare) or [`with_keys`](Self::with_keys) to obtain a
-/// [`PreparedDsfsArgument`], which then implements
-/// [`NonInteractiveArgument`] plus the preprocessing capability.
-pub struct UnpreparedDsfsArgument<IA, S, DS = Keccak, const SALT_LEN: usize = 0> {
-    ia: IA,
-    duplex_sponge: DS,
+/// Stateless: it holds the protocol body and the sponge, but no keys. Call
+/// [`preprocess`](PreprocessingNonInteractiveArgument::preprocess) to obtain a
+/// [`ProvingKey`] and a verifier key, then pass the relevant key to `prove` / `verify`.
+pub struct PreprocessedDsfsArgument<IA, S, DS = Keccak, const SALT_LEN: usize = 0> {
+    pub ia: IA,
+    pub duplex_sponge: DS,
     _session: PhantomData<S>,
 }
 
-/// Construct an unprepared DSFS non-interactive-argument view of a preprocessing body.
+/// Construct the DSFS non-interactive-argument view of a preprocessing body.
 #[must_use]
 pub const fn preprocessing_non_interactive_argument<IA, S, DS>(
     ia: IA,
     duplex_sponge: DS,
-) -> UnpreparedDsfsArgument<IA, S, DS, 0> {
-    UnpreparedDsfsArgument::new(ia, duplex_sponge)
+) -> PreprocessedDsfsArgument<IA, S, DS, 0> {
+    PreprocessedDsfsArgument::new(ia, duplex_sponge)
 }
 
-/// Construct a salted unprepared DSFS non-interactive-argument view of a preprocessing body.
+/// Construct a salted DSFS non-interactive-argument view of a preprocessing body.
 #[must_use]
 pub const fn preprocessing_non_interactive_argument_with_salt<IA, S, DS, const SALT_LEN: usize>(
     ia: IA,
     duplex_sponge: DS,
-) -> UnpreparedDsfsArgument<IA, S, DS, SALT_LEN> {
-    UnpreparedDsfsArgument::new(ia, duplex_sponge)
+) -> PreprocessedDsfsArgument<IA, S, DS, SALT_LEN> {
+    PreprocessedDsfsArgument::new(ia, duplex_sponge)
 }
 
-impl<IA, S, DS, const SALT_LEN: usize> UnpreparedDsfsArgument<IA, S, DS, SALT_LEN> {
+impl<IA, S, DS, const SALT_LEN: usize> PreprocessedDsfsArgument<IA, S, DS, SALT_LEN> {
     #[must_use]
     pub const fn new(ia: IA, duplex_sponge: DS) -> Self {
         Self {
@@ -161,21 +166,89 @@ impl<IA, S, DS, const SALT_LEN: usize> UnpreparedDsfsArgument<IA, S, DS, SALT_LE
     }
 }
 
-impl<IA, S, DS, const SALT_LEN: usize> UnpreparedDsfsArgument<IA, S, DS, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> ProtocolCore for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
 where
     IA: PreprocessingInteractiveArgument,
 {
-    pub fn prepare(self, ix: &IA::Index) -> PreparedDsfsArgument<IA, S, DS, SALT_LEN> {
+    fn protocol_id(&self) -> impl AsRef<[u8]> {
+        self.ia.protocol_id()
+    }
+}
+
+impl<IA, S, DS, const SALT_LEN: usize> ArgumentCore for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
+where
+    IA: PreprocessingInteractiveArgument,
+{
+    type Instance = IA::Instance;
+    type Witness = IA::Witness;
+}
+
+impl<IA, S, DS, const SALT_LEN: usize> PreprocessingCore
+    for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
+where
+    IA: PreprocessingInteractiveArgument,
+{
+    type Index = IA::Index;
+    type ProverKey = IA::ProverKey;
+    type VerifierKey = IA::VerifierKey;
+
+    fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
+        self.ia.index(ix)
+    }
+}
+
+impl<IA, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveArgument
+    for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IA: PreprocessingInteractiveArgument,
+    S: Encoding<[u8]>,
+    IA::Instance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
+    type Session = S;
+
+    fn preprocess(&self, ix: &Self::Index) -> (ProvingKey<Self::ProverKey>, Self::VerifierKey) {
         let (pk, vk) = self.ia.index(ix);
-        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.duplex_sponge)
+        let committed_index = vk.committed_index();
+        (ProvingKey::new(pk, committed_index), vk)
     }
 
-    pub fn with_keys(
-        self,
-        pk: IA::ProverKey,
-        vk: IA::VerifierKey,
-    ) -> PreparedDsfsArgument<IA, S, DS, SALT_LEN> {
-        PreparedDsfsArgument::from_keys(self.ia, pk, vk, self.duplex_sponge)
+    fn prove(
+        &self,
+        proving_key: &ProvingKey<Self::ProverKey>,
+        session: &Self::Session,
+        instance: &Self::Instance,
+        witness: &Self::Witness,
+    ) -> NargProof {
+        prepared_prove_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
+            &self.ia,
+            &proving_key.key,
+            &proving_key.committed_index,
+            self.duplex_sponge.clone(),
+            session,
+            instance,
+            witness,
+        )
+    }
+
+    fn verify(
+        &self,
+        verifier_key: &Self::VerifierKey,
+        session: &Self::Session,
+        instance: &Self::Instance,
+        proof: &NargProof,
+    ) -> ia_core::VerificationResult<()> {
+        let committed_index = verifier_key.committed_index();
+        prepared_verify_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
+            &self.ia,
+            verifier_key,
+            &committed_index,
+            self.duplex_sponge.clone(),
+            session,
+            instance,
+            proof.as_bytes(),
+        )
     }
 }
 
@@ -276,37 +349,33 @@ where
     }
 }
 
-/// DSFS compiler wrapper for a preprocessing reduction before keys are prepared.
-///
-/// This wrapper deliberately does not implement [`NonInteractiveReduction`].
-/// Call [`prepare`](Self::prepare) or [`with_keys`](Self::with_keys) to obtain a
-/// [`PreparedDsfsReduction`], which then implements
-/// [`NonInteractiveReduction`] plus the preprocessing capability.
-pub struct UnpreparedDsfsReduction<IR, S, DS = Keccak, const SALT_LEN: usize = 0> {
-    ir: IR,
-    duplex_sponge: DS,
+/// DSFS compiler wrapper implementing [`PreprocessingNonInteractiveReduction`] for a
+/// preprocessing interactive reduction. Stateless; see [`PreprocessedDsfsArgument`].
+pub struct PreprocessedDsfsReduction<IR, S, DS = Keccak, const SALT_LEN: usize = 0> {
+    pub ir: IR,
+    pub duplex_sponge: DS,
     _session: PhantomData<S>,
 }
 
-/// Construct an unprepared DSFS non-interactive-reduction view of a preprocessing body.
+/// Construct the DSFS non-interactive-reduction view of a preprocessing body.
 #[must_use]
 pub const fn preprocessing_non_interactive_reduction<IR, S, DS>(
     ir: IR,
     duplex_sponge: DS,
-) -> UnpreparedDsfsReduction<IR, S, DS, 0> {
-    UnpreparedDsfsReduction::new(ir, duplex_sponge)
+) -> PreprocessedDsfsReduction<IR, S, DS, 0> {
+    PreprocessedDsfsReduction::new(ir, duplex_sponge)
 }
 
-/// Construct a salted unprepared DSFS non-interactive-reduction view of a preprocessing body.
+/// Construct a salted DSFS non-interactive-reduction view of a preprocessing body.
 #[must_use]
 pub const fn preprocessing_non_interactive_reduction_with_salt<IR, S, DS, const SALT_LEN: usize>(
     ir: IR,
     duplex_sponge: DS,
-) -> UnpreparedDsfsReduction<IR, S, DS, SALT_LEN> {
-    UnpreparedDsfsReduction::new(ir, duplex_sponge)
+) -> PreprocessedDsfsReduction<IR, S, DS, SALT_LEN> {
+    PreprocessedDsfsReduction::new(ir, duplex_sponge)
 }
 
-impl<IR, S, DS, const SALT_LEN: usize> UnpreparedDsfsReduction<IR, S, DS, SALT_LEN> {
+impl<IR, S, DS, const SALT_LEN: usize> PreprocessedDsfsReduction<IR, S, DS, SALT_LEN> {
     #[must_use]
     pub const fn new(ir: IR, duplex_sponge: DS) -> Self {
         Self {
@@ -317,21 +386,93 @@ impl<IR, S, DS, const SALT_LEN: usize> UnpreparedDsfsReduction<IR, S, DS, SALT_L
     }
 }
 
-impl<IR, S, DS, const SALT_LEN: usize> UnpreparedDsfsReduction<IR, S, DS, SALT_LEN>
+impl<IR, S, DS, const SALT_LEN: usize> ProtocolCore
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
 where
     IR: PreprocessingInteractiveReduction,
 {
-    pub fn prepare(self, ix: &IR::Index) -> PreparedDsfsReduction<IR, S, DS, SALT_LEN> {
+    fn protocol_id(&self) -> impl AsRef<[u8]> {
+        self.ir.protocol_id()
+    }
+}
+
+impl<IR, S, DS, const SALT_LEN: usize> ReductionCore
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
+where
+    IR: PreprocessingInteractiveReduction,
+{
+    type SourceInstance = IR::SourceInstance;
+    type TargetInstance = IR::TargetInstance;
+    type SourceWitness = IR::SourceWitness;
+    type TargetWitness = IR::TargetWitness;
+}
+
+impl<IR, S, DS, const SALT_LEN: usize> PreprocessingCore
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
+where
+    IR: PreprocessingInteractiveReduction,
+{
+    type Index = IR::Index;
+    type ProverKey = IR::ProverKey;
+    type VerifierKey = IR::VerifierKey;
+
+    fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
+        self.ir.index(ix)
+    }
+}
+
+impl<IR, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveReduction
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IR: PreprocessingInteractiveReduction,
+    S: Encoding<[u8]>,
+    IR::SourceInstance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
+    type Session = S;
+
+    fn preprocess(&self, ix: &Self::Index) -> (ProvingKey<Self::ProverKey>, Self::VerifierKey) {
         let (pk, vk) = self.ir.index(ix);
-        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.duplex_sponge)
+        let committed_index = vk.committed_index();
+        (ProvingKey::new(pk, committed_index), vk)
     }
 
-    pub fn with_keys(
-        self,
-        pk: IR::ProverKey,
-        vk: IR::VerifierKey,
-    ) -> PreparedDsfsReduction<IR, S, DS, SALT_LEN> {
-        PreparedDsfsReduction::from_keys(self.ir, pk, vk, self.duplex_sponge)
+    fn prove(
+        &self,
+        proving_key: &ProvingKey<Self::ProverKey>,
+        session: &Self::Session,
+        instance: &Self::SourceInstance,
+        witness: &Self::SourceWitness,
+    ) -> (NargProof, Self::TargetInstance, Self::TargetWitness) {
+        prepared_prove_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
+            &self.ir,
+            &proving_key.key,
+            &proving_key.committed_index,
+            self.duplex_sponge.clone(),
+            session,
+            instance,
+            witness,
+        )
+    }
+
+    fn verify(
+        &self,
+        verifier_key: &Self::VerifierKey,
+        session: &Self::Session,
+        instance: &Self::SourceInstance,
+        proof: &NargProof,
+    ) -> ia_core::VerificationResult<Self::TargetInstance> {
+        let committed_index = verifier_key.committed_index();
+        prepared_verify_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
+            &self.ir,
+            verifier_key,
+            &committed_index,
+            self.duplex_sponge.clone(),
+            session,
+            instance,
+            proof.as_bytes(),
+        )
     }
 }
 
