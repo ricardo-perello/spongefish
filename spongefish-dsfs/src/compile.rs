@@ -7,11 +7,11 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    ArgumentCore, Encoding, InteractiveArgument, InteractiveReduction, NargDeserialize, NargProof,
-    NonInteractiveArgument, NonInteractiveReduction, PreprocessingCore,
+    ArgumentCore, CommittedIndex, Encoding, InteractiveArgument, InteractiveReduction,
+    NargDeserialize, NargProof, NonInteractiveArgument, NonInteractiveReduction, PreprocessingCore,
     PreprocessingInteractiveArgument, PreprocessingInteractiveReduction,
     PreprocessingNonInteractiveArgument, PreprocessingNonInteractiveReduction, ProtocolCore,
-    ProvingKey, ReductionCore, VerifierKeyCommitment,
+    ReductionCore,
 };
 
 use crate::runners::{
@@ -128,9 +128,10 @@ where
 /// DSFS compiler wrapper implementing [`PreprocessingNonInteractiveArgument`] for a
 /// preprocessing interactive body.
 ///
-/// Stateless: it holds the protocol body and the sponge, but no keys. Call
-/// [`preprocess`](PreprocessingNonInteractiveArgument::preprocess) to obtain a
-/// [`ProvingKey`] and a verifier key, then pass the relevant key to `prove` / `verify`.
+/// Stateless: it holds the protocol body and the sponge, but no keys. Obtain
+/// `(pk, vk)` from the body's [`index`](PreprocessingCore::index) and pass the
+/// relevant key to `prove` / `verify`; the wrapper derives the committed index
+/// from whichever key it is handed.
 pub struct PreprocessedDsfsArgument<IA, S, DS = Keccak, const SALT_LEN: usize = 0> {
     pub ia: IA,
     pub duplex_sponge: DS,
@@ -193,7 +194,9 @@ where
     type VerifierKey = IA::VerifierKey;
 
     fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
-        self.ia.index(ix)
+        // Route through `index_checked` so a prover/verifier `committed_index`
+        // mismatch is caught at index time rather than as an opaque verify failure.
+        self.ia.index_checked(ix)
     }
 }
 
@@ -208,23 +211,18 @@ where
 {
     type Session = S;
 
-    fn preprocess(&self, ix: &Self::Index) -> (ProvingKey<Self::ProverKey>, Self::VerifierKey) {
-        let (pk, vk) = self.ia.index(ix);
-        let committed_index = vk.committed_index();
-        (ProvingKey::new(pk, committed_index), vk)
-    }
-
     fn prove(
         &self,
-        proving_key: &ProvingKey<Self::ProverKey>,
+        prover_key: &Self::ProverKey,
         session: &Self::Session,
         instance: &Self::Instance,
         witness: &Self::Witness,
     ) -> NargProof {
+        let committed_index = prover_key.committed_index();
         prepared_prove_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
             &self.ia,
-            &proving_key.key,
-            &proving_key.committed_index,
+            prover_key,
+            &committed_index,
             self.duplex_sponge.clone(),
             session,
             instance,
@@ -417,7 +415,9 @@ where
     type VerifierKey = IR::VerifierKey;
 
     fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
-        self.ir.index(ix)
+        // Route through `index_checked` so a prover/verifier `committed_index`
+        // mismatch is caught at index time rather than as an opaque verify failure.
+        self.ir.index_checked(ix)
     }
 }
 
@@ -432,23 +432,18 @@ where
 {
     type Session = S;
 
-    fn preprocess(&self, ix: &Self::Index) -> (ProvingKey<Self::ProverKey>, Self::VerifierKey) {
-        let (pk, vk) = self.ir.index(ix);
-        let committed_index = vk.committed_index();
-        (ProvingKey::new(pk, committed_index), vk)
-    }
-
     fn prove(
         &self,
-        proving_key: &ProvingKey<Self::ProverKey>,
+        prover_key: &Self::ProverKey,
         session: &Self::Session,
         instance: &Self::SourceInstance,
         witness: &Self::SourceWitness,
     ) -> (NargProof, Self::TargetInstance, Self::TargetWitness) {
+        let committed_index = prover_key.committed_index();
         prepared_prove_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
             &self.ir,
-            &proving_key.key,
-            &proving_key.committed_index,
+            prover_key,
+            &committed_index,
             self.duplex_sponge.clone(),
             session,
             instance,

@@ -21,10 +21,11 @@
 //! - [`plain_non_interactive_reduction`] builds a DSFS wrapper for a plain
 //!   `InteractiveReduction` and immediately exposes `prove` / `verify`.
 //! - [`preprocessing_non_interactive_argument`] builds a stateless DSFS wrapper
-//!   for a `PreprocessingInteractiveArgument`; call `.preprocess(&ix)` to get a
-//!   `ProvingKey` + verifier key, then pass the relevant key to `prove` / `verify`.
+//!   for a `PreprocessingInteractiveArgument`; obtain `(pk, vk)` from the body's
+//!   `index(&ix)` and pass the relevant key to `prove` / `verify` (the wrapper
+//!   derives the committed index from whichever key it is handed).
 //! - [`preprocessing_non_interactive_reduction`] builds a stateless DSFS wrapper
-//!   for a `PreprocessingInteractiveReduction`; same `preprocess` + keys-as-inputs shape.
+//!   for a `PreprocessingInteractiveReduction`; same keys-as-inputs shape.
 //! - `*_with_salt` constructor variants add an explicit prover-chosen salt
 //!   message before protocol execution.
 //! - The `duplex_sponge` argument selects a byte-oriented sponge such as [`Keccak`] or
