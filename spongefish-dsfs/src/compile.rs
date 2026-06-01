@@ -129,7 +129,7 @@ where
 /// preprocessing interactive body.
 ///
 /// Stateless: it holds the protocol body and the sponge, but no keys. Obtain
-/// `(pk, vk)` from the body's [`index`](PreprocessingCore::index) and pass the
+/// `(pk, vk)` from the body's [`preprocess`](PreprocessingCore::preprocess) and pass the
 /// relevant key to `prove` / `verify`; the wrapper derives the committed index
 /// from whichever key it is handed.
 pub struct PreprocessedDsfsArgument<IA, S, DS = Keccak, const SALT_LEN: usize = 0> {
@@ -193,10 +193,10 @@ where
     type ProverKey = IA::ProverKey;
     type VerifierKey = IA::VerifierKey;
 
-    fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
-        // Route through `index_checked` so a prover/verifier `committed_index`
-        // mismatch is caught at index time rather than as an opaque verify failure.
-        self.ia.index_checked(ix)
+    fn preprocess(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
+        // Route through `preprocess_checked` so a prover/verifier `committed_index`
+        // mismatch is caught at preprocessing time rather than as an opaque verify failure.
+        self.ia.preprocess_checked(ix)
     }
 }
 
@@ -414,10 +414,10 @@ where
     type ProverKey = IR::ProverKey;
     type VerifierKey = IR::VerifierKey;
 
-    fn index(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
-        // Route through `index_checked` so a prover/verifier `committed_index`
-        // mismatch is caught at index time rather than as an opaque verify failure.
-        self.ir.index_checked(ix)
+    fn preprocess(&self, ix: &Self::Index) -> (Self::ProverKey, Self::VerifierKey) {
+        // Route through `preprocess_checked` so a prover/verifier `committed_index`
+        // mismatch is caught at preprocessing time rather than as an opaque verify failure.
+        self.ir.preprocess_checked(ix)
     }
 }
 
