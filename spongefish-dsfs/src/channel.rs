@@ -133,7 +133,9 @@ impl<DS: DuplexSpongeInterface> SpongeProver<DS> {
     }
 }
 
-impl<DS: DuplexSpongeInterface> ProverChannel<DS::U> for SpongeProver<DS> {
+impl<DS: DuplexSpongeInterface> ProverChannel for SpongeProver<DS> {
+    type Unit = DS::U;
+
     fn send_prover_message<PM: Encoding<[DS::U]> + NargSerialize>(&mut self, msg: &PM) {
         self.state.prover_message(msg);
     }
@@ -177,7 +179,9 @@ impl<'a, DS: DuplexSpongeInterface> SpongeVerifier<'a, DS> {
     }
 }
 
-impl<DS: DuplexSpongeInterface> VerifierChannel<DS::U> for SpongeVerifier<'_, DS> {
+impl<DS: DuplexSpongeInterface> VerifierChannel for SpongeVerifier<'_, DS> {
+    type Unit = DS::U;
+
     fn read_prover_message<PM: Encoding<[DS::U]> + Deserialize>(
         &mut self,
     ) -> ia_core::VerificationResult<PM> {
