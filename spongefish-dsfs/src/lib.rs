@@ -64,7 +64,7 @@ pub use compile::{
     plain_non_interactive_reduction, plain_non_interactive_reduction_with_salt,
     preprocessing_non_interactive_argument, preprocessing_non_interactive_argument_with_salt,
     preprocessing_non_interactive_reduction, preprocessing_non_interactive_reduction_with_salt,
-    ByteDuplexSponge, DsfsArgument, DsfsReduction, PreprocessedDsfsArgument,
+    ByteDuplexSponge, CombinedNarg, DsfsArgument, DsfsReduction, PreprocessedDsfsArgument,
     PreprocessedDsfsReduction,
 };
 pub use narg_security::{

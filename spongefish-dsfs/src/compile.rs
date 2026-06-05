@@ -1,4 +1,12 @@
 //! DSFS non-interactive prove/verify entry points.
+//!
+//! Each `Dsfs*` wrapper implements the **prover half** and the **verifier half**
+//! of its non-interactive leaf trait separately, with bounds relaxed to the
+//! matching interactive half: the prove impl needs only `…Prover`, the verify
+//! impl only `…Verifier`. The `ia-core` blanket conjunction re-derives the full
+//! trait whenever both halves are present, so the full-compile path is preserved
+//! — and an interactive body that implements only a prover (or only a verifier)
+//! compiles to a prover-only (or verifier-only) non-interactive object.
 
 extern crate alloc;
 
@@ -7,11 +15,15 @@ use core::marker::PhantomData;
 use rand::RngCore;
 
 use ia_core::{
-    ArgumentCore, CommittedIndex, Encoding, InteractiveArgument, InteractiveReduction,
-    NargDeserialize, NargProof, NonInteractiveArgument, NonInteractiveReduction, PreprocessingCore,
-    PreprocessingInteractiveArgument, PreprocessingInteractiveReduction,
-    PreprocessingNonInteractiveArgument, PreprocessingNonInteractiveReduction, ProtocolCore,
-    ReductionCore,
+    ArgumentCore, CommittedIndex, Encoding, InteractiveArgumentProver, InteractiveArgumentVerifier,
+    InteractiveReductionProver, InteractiveReductionVerifier, NargDeserialize, NargProof,
+    NonInteractiveArgumentProver, NonInteractiveArgumentVerifier, NonInteractiveReductionProver,
+    NonInteractiveReductionVerifier, NonInteractiveSession, PreprocessingCore,
+    PreprocessingInteractiveArgumentProver, PreprocessingInteractiveArgumentVerifier,
+    PreprocessingInteractiveReductionProver, PreprocessingInteractiveReductionVerifier,
+    PreprocessingNonInteractiveArgumentProver, PreprocessingNonInteractiveArgumentVerifier,
+    PreprocessingNonInteractiveReductionProver, PreprocessingNonInteractiveReductionVerifier,
+    ProtocolCore, ReductionCore, VerificationResult,
 };
 
 use crate::runners::{
@@ -29,7 +41,7 @@ pub trait ByteDuplexSponge: DuplexSpongeInterface<U = u8> {}
 
 impl<T: DuplexSpongeInterface<U = u8>> ByteDuplexSponge for T {}
 
-/// DSFS compiler wrapper implementing [`NonInteractiveArgument`] for a plain IA.
+/// DSFS compiler wrapper implementing the non-interactive argument traits for a plain IA.
 ///
 /// Prefer constructing this with [`plain_non_interactive_argument`].
 pub struct DsfsArgument<IA, S, DS = Keccak, const SALT_LEN: usize = 0> {
@@ -69,7 +81,7 @@ impl<IA, S, DS, const SALT_LEN: usize> DsfsArgument<IA, S, DS, SALT_LEN> {
 
 impl<IA, S, DS, const SALT_LEN: usize> ProtocolCore for DsfsArgument<IA, S, DS, SALT_LEN>
 where
-    IA: InteractiveArgument,
+    IA: ProtocolCore,
 {
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ia.protocol_id()
@@ -78,22 +90,25 @@ where
 
 impl<IA, S, DS, const SALT_LEN: usize> ArgumentCore for DsfsArgument<IA, S, DS, SALT_LEN>
 where
-    IA: InteractiveArgument,
+    IA: ArgumentCore,
 {
     type Instance = IA::Instance;
     type Witness = IA::Witness;
 }
 
-impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveArgument for DsfsArgument<IA, S, DS, SALT_LEN>
+impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveSession for DsfsArgument<IA, S, DS, SALT_LEN> {
+    type Session = S;
+}
+
+impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveArgumentProver
+    for DsfsArgument<IA, S, DS, SALT_LEN>
 where
     DS: SpongeInfo + Clone,
-    IA: InteractiveArgument,
+    IA: InteractiveArgumentProver,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[DS::U]>,
-    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
-    type Session = S;
-
     fn prove(
         &self,
         session: &Self::Session,
@@ -108,13 +123,23 @@ where
             witness,
         )
     }
+}
 
+impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveArgumentVerifier
+    for DsfsArgument<IA, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IA: InteractiveArgumentVerifier,
+    S: Encoding<[u8]>,
+    IA::Instance: Encoding<[DS::U]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
     fn verify(
         &self,
         session: &Self::Session,
         instance: &Self::Instance,
         proof: &NargProof,
-    ) -> ia_core::VerificationResult<()> {
+    ) -> VerificationResult<()> {
         verify_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
             &self.ia,
             self.duplex_sponge.clone(),
@@ -125,8 +150,8 @@ where
     }
 }
 
-/// DSFS compiler wrapper implementing [`PreprocessingNonInteractiveArgument`] for a
-/// preprocessing interactive body.
+/// DSFS compiler wrapper implementing the preprocessing non-interactive argument
+/// traits for a preprocessing interactive body.
 ///
 /// Stateless: it holds the protocol body and the sponge, but no keys. Obtain
 /// `(pk, vk)` from the body's [`preprocess`](PreprocessingCore::preprocess) and pass the
@@ -169,7 +194,7 @@ impl<IA, S, DS, const SALT_LEN: usize> PreprocessedDsfsArgument<IA, S, DS, SALT_
 
 impl<IA, S, DS, const SALT_LEN: usize> ProtocolCore for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
 where
-    IA: PreprocessingInteractiveArgument,
+    IA: ProtocolCore,
 {
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ia.protocol_id()
@@ -178,7 +203,7 @@ where
 
 impl<IA, S, DS, const SALT_LEN: usize> ArgumentCore for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
 where
-    IA: PreprocessingInteractiveArgument,
+    IA: ArgumentCore,
 {
     type Instance = IA::Instance;
     type Witness = IA::Witness;
@@ -187,7 +212,7 @@ where
 impl<IA, S, DS, const SALT_LEN: usize> PreprocessingCore
     for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
 where
-    IA: PreprocessingInteractiveArgument,
+    IA: PreprocessingCore,
 {
     type Index = IA::Index;
     type ProverKey = IA::ProverKey;
@@ -200,17 +225,21 @@ where
     }
 }
 
-impl<IA, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveArgument
+impl<IA, S, DS, const SALT_LEN: usize> NonInteractiveSession
+    for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
+{
+    type Session = S;
+}
+
+impl<IA, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveArgumentProver
     for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
 where
     DS: SpongeInfo + Clone,
-    IA: PreprocessingInteractiveArgument,
+    IA: PreprocessingInteractiveArgumentProver,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
-    type Session = S;
-
     fn prove(
         &self,
         prover_key: &Self::ProverKey,
@@ -229,14 +258,24 @@ where
             witness,
         )
     }
+}
 
+impl<IA, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveArgumentVerifier
+    for PreprocessedDsfsArgument<IA, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IA: PreprocessingInteractiveArgumentVerifier,
+    S: Encoding<[u8]>,
+    IA::Instance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
     fn verify(
         &self,
         verifier_key: &Self::VerifierKey,
         session: &Self::Session,
         instance: &Self::Instance,
         proof: &NargProof,
-    ) -> ia_core::VerificationResult<()> {
+    ) -> VerificationResult<()> {
         let committed_index = verifier_key.committed_index();
         prepared_verify_with_sponge_and_salt::<IA, DS, S, SALT_LEN>(
             &self.ia,
@@ -250,7 +289,7 @@ where
     }
 }
 
-/// DSFS compiler wrapper implementing [`NonInteractiveReduction`] for an IR.
+/// DSFS compiler wrapper implementing the non-interactive reduction traits for an IR.
 pub struct DsfsReduction<IR, S, DS = Keccak, const SALT_LEN: usize = 0> {
     pub ir: IR,
     pub duplex_sponge: DS,
@@ -288,7 +327,7 @@ pub const fn plain_non_interactive_reduction_with_salt<IR, S, DS, const SALT_LEN
 
 impl<IR, S, DS, const SALT_LEN: usize> ProtocolCore for DsfsReduction<IR, S, DS, SALT_LEN>
 where
-    IR: InteractiveReduction,
+    IR: ProtocolCore,
 {
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ir.protocol_id()
@@ -297,7 +336,7 @@ where
 
 impl<IR, S, DS, const SALT_LEN: usize> ReductionCore for DsfsReduction<IR, S, DS, SALT_LEN>
 where
-    IR: InteractiveReduction,
+    IR: ReductionCore,
 {
     type SourceInstance = IR::SourceInstance;
     type TargetInstance = IR::TargetInstance;
@@ -305,17 +344,19 @@ where
     type TargetWitness = IR::TargetWitness;
 }
 
-impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveReduction
+impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveSession for DsfsReduction<IR, S, DS, SALT_LEN> {
+    type Session = S;
+}
+
+impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveReductionProver
     for DsfsReduction<IR, S, DS, SALT_LEN>
 where
     DS: SpongeInfo + Clone,
-    IR: InteractiveReduction,
+    IR: InteractiveReductionProver,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[DS::U]>,
-    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
-    type Session = S;
-
     fn prove(
         &self,
         session: &Self::Session,
@@ -330,13 +371,23 @@ where
             witness,
         )
     }
+}
 
+impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveReductionVerifier
+    for DsfsReduction<IR, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IR: InteractiveReductionVerifier,
+    S: Encoding<[u8]>,
+    IR::SourceInstance: Encoding<[DS::U]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
     fn verify(
         &self,
         session: &Self::Session,
         instance: &Self::SourceInstance,
         proof: &NargProof,
-    ) -> ia_core::VerificationResult<Self::TargetInstance> {
+    ) -> VerificationResult<Self::TargetInstance> {
         verify_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
             &self.ir,
             self.duplex_sponge.clone(),
@@ -347,8 +398,9 @@ where
     }
 }
 
-/// DSFS compiler wrapper implementing [`PreprocessingNonInteractiveReduction`] for a
-/// preprocessing interactive reduction. Stateless; see [`PreprocessedDsfsArgument`].
+/// DSFS compiler wrapper implementing the preprocessing non-interactive reduction
+/// traits for a preprocessing interactive reduction. Stateless; see
+/// [`PreprocessedDsfsArgument`].
 pub struct PreprocessedDsfsReduction<IR, S, DS = Keccak, const SALT_LEN: usize = 0> {
     pub ir: IR,
     pub duplex_sponge: DS,
@@ -387,7 +439,7 @@ impl<IR, S, DS, const SALT_LEN: usize> PreprocessedDsfsReduction<IR, S, DS, SALT
 impl<IR, S, DS, const SALT_LEN: usize> ProtocolCore
     for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
 where
-    IR: PreprocessingInteractiveReduction,
+    IR: ProtocolCore,
 {
     fn protocol_id(&self) -> impl AsRef<[u8]> {
         self.ir.protocol_id()
@@ -397,7 +449,7 @@ where
 impl<IR, S, DS, const SALT_LEN: usize> ReductionCore
     for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
 where
-    IR: PreprocessingInteractiveReduction,
+    IR: ReductionCore,
 {
     type SourceInstance = IR::SourceInstance;
     type TargetInstance = IR::TargetInstance;
@@ -408,7 +460,7 @@ where
 impl<IR, S, DS, const SALT_LEN: usize> PreprocessingCore
     for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
 where
-    IR: PreprocessingInteractiveReduction,
+    IR: PreprocessingCore,
 {
     type Index = IR::Index;
     type ProverKey = IR::ProverKey;
@@ -421,17 +473,21 @@ where
     }
 }
 
-impl<IR, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveReduction
+impl<IR, S, DS, const SALT_LEN: usize> NonInteractiveSession
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
+{
+    type Session = S;
+}
+
+impl<IR, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveReductionProver
     for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
 where
     DS: SpongeInfo + Clone,
-    IR: PreprocessingInteractiveReduction,
+    IR: PreprocessingInteractiveReductionProver,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
-    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+    [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
-    type Session = S;
-
     fn prove(
         &self,
         prover_key: &Self::ProverKey,
@@ -450,14 +506,24 @@ where
             witness,
         )
     }
+}
 
+impl<IR, S, DS, const SALT_LEN: usize> PreprocessingNonInteractiveReductionVerifier
+    for PreprocessedDsfsReduction<IR, S, DS, SALT_LEN>
+where
+    DS: SpongeInfo + Clone,
+    IR: PreprocessingInteractiveReductionVerifier,
+    S: Encoding<[u8]>,
+    IR::SourceInstance: Encoding<[u8]>,
+    [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
+{
     fn verify(
         &self,
         verifier_key: &Self::VerifierKey,
         session: &Self::Session,
         instance: &Self::SourceInstance,
         proof: &NargProof,
-    ) -> ia_core::VerificationResult<Self::TargetInstance> {
+    ) -> VerificationResult<Self::TargetInstance> {
         let committed_index = verifier_key.committed_index();
         prepared_verify_reduction_with_sponge_and_salt::<IR, DS, S, SALT_LEN>(
             &self.ir,
@@ -468,6 +534,104 @@ where
             instance,
             proof.as_bytes(),
         )
+    }
+}
+
+/// Recombine a separately-built non-interactive **prover** and **verifier** into a
+/// single non-interactive argument.
+///
+/// `Pv` supplies `prove`, `Vf` supplies `verify`. The two must describe the *same*
+/// compiled proof format: identical instance / witness / session types (enforced at
+/// the type level by the bounds below) and identical `protocol_id` (checked at
+/// construction). The common case is the two halves of one [`DsfsArgument`], where
+/// agreement is automatic; the runtime guard exists to catch two independently
+/// compiled, mismatched specs — which would otherwise fail at verify with no signal.
+///
+/// Because it implements both [`NonInteractiveArgumentProver`] and
+/// [`NonInteractiveArgumentVerifier`], the `ia-core` blanket conjunction makes a
+/// `CombinedNarg` a full `NonInteractiveArgument`.
+pub struct CombinedNarg<Pv, Vf> {
+    prover: Pv,
+    verifier: Vf,
+}
+
+impl<Pv, Vf> CombinedNarg<Pv, Vf>
+where
+    Pv: NonInteractiveArgumentProver,
+    Vf: NonInteractiveArgumentVerifier<
+            Instance = Pv::Instance,
+            Witness = Pv::Witness,
+            Session = Pv::Session,
+        >,
+{
+    /// Combine a prover and a verifier, asserting they agree on `protocol_id`.
+    ///
+    /// The `protocol_id` check is a `debug_assert!`: it catches mismatched specs in
+    /// debug/test builds without adding a release-mode branch on the hot path.
+    #[must_use]
+    pub fn new(prover: Pv, verifier: Vf) -> Self {
+        let p = prover.protocol_id();
+        let v = verifier.protocol_id();
+        debug_assert_eq!(
+            p.as_ref(),
+            v.as_ref(),
+            "CombinedNarg: prover and verifier disagree on protocol_id; their proof formats differ",
+        );
+        drop((p, v));
+        Self { prover, verifier }
+    }
+}
+
+impl<Pv, Vf> ProtocolCore for CombinedNarg<Pv, Vf>
+where
+    Pv: ProtocolCore,
+{
+    fn protocol_id(&self) -> impl AsRef<[u8]> {
+        self.prover.protocol_id()
+    }
+}
+
+impl<Pv, Vf> ArgumentCore for CombinedNarg<Pv, Vf>
+where
+    Pv: ArgumentCore,
+{
+    type Instance = Pv::Instance;
+    type Witness = Pv::Witness;
+}
+
+impl<Pv, Vf> NonInteractiveSession for CombinedNarg<Pv, Vf>
+where
+    Pv: NonInteractiveSession,
+{
+    type Session = Pv::Session;
+}
+
+impl<Pv, Vf> NonInteractiveArgumentProver for CombinedNarg<Pv, Vf>
+where
+    Pv: NonInteractiveArgumentProver,
+{
+    fn prove(
+        &self,
+        session: &Self::Session,
+        instance: &Self::Instance,
+        witness: &Self::Witness,
+    ) -> NargProof {
+        self.prover.prove(session, instance, witness)
+    }
+}
+
+impl<Pv, Vf> NonInteractiveArgumentVerifier for CombinedNarg<Pv, Vf>
+where
+    Pv: NonInteractiveArgumentProver,
+    Vf: NonInteractiveArgumentVerifier<Instance = Pv::Instance, Session = Pv::Session>,
+{
+    fn verify(
+        &self,
+        session: &Self::Session,
+        instance: &Self::Instance,
+        proof: &NargProof,
+    ) -> VerificationResult<()> {
+        self.verifier.verify(session, instance, proof)
     }
 }
 
@@ -482,7 +646,7 @@ pub(crate) fn prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
 ) -> NargProof
 where
     DS: SpongeInfo,
-    IA: InteractiveArgument,
+    IA: InteractiveArgumentProver,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[DS::U]>,
     [u8; SALT_LEN]: Encoding<[DS::U]>,
@@ -510,10 +674,10 @@ pub(crate) fn verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     session: &S,
     instance: &IA::Instance,
     proof: &[u8],
-) -> ia_core::VerificationResult<()>
+) -> VerificationResult<()>
 where
     DS: SpongeInfo,
-    IA: InteractiveArgument,
+    IA: InteractiveArgumentVerifier,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[DS::U]>,
     [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
@@ -547,7 +711,7 @@ fn prove_reduction_with_sponge_and_salt_full<IR, DS, S, const SALT_LEN: usize>(
 ) -> (NargProof, IR::TargetInstance, IR::TargetWitness)
 where
     DS: SpongeInfo,
-    IR: InteractiveReduction,
+    IR: InteractiveReductionProver,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[DS::U]>,
     [u8; SALT_LEN]: Encoding<[DS::U]>,
@@ -579,10 +743,10 @@ pub(crate) fn verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: u
     session: &S,
     instance: &IR::SourceInstance,
     proof: &[u8],
-) -> ia_core::VerificationResult<IR::TargetInstance>
+) -> VerificationResult<IR::TargetInstance>
 where
     DS: SpongeInfo,
-    IR: InteractiveReduction,
+    IR: InteractiveReductionVerifier,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[DS::U]>,
     [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,

@@ -12,8 +12,9 @@ use rand::RngCore;
 
 use ia_core::{
     CommittedIndexBytes, Encoding, IndexedInstanceRef, NargDeserialize, NargProof,
-    PreprocessingInteractiveArgument, PreprocessingInteractiveReduction, VerificationError,
-    VerificationResult,
+    PreprocessingInteractiveArgumentProver, PreprocessingInteractiveArgumentVerifier,
+    PreprocessingInteractiveReductionProver, PreprocessingInteractiveReductionVerifier,
+    VerificationError, VerificationResult,
 };
 
 use spongefish::DomainSeparator;
@@ -32,7 +33,7 @@ pub(crate) fn prepared_prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usi
 ) -> NargProof
 where
     DS: SpongeInfo,
-    IA: PreprocessingInteractiveArgument,
+    IA: PreprocessingInteractiveArgumentProver,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[DS::U]>,
@@ -65,7 +66,7 @@ pub(crate) fn prepared_verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: us
 ) -> VerificationResult<()>
 where
     DS: SpongeInfo,
-    IA: PreprocessingInteractiveArgument,
+    IA: PreprocessingInteractiveArgumentVerifier,
     S: Encoding<[u8]>,
     IA::Instance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
@@ -99,7 +100,7 @@ pub(crate) fn prepared_prove_reduction_with_sponge_and_salt<IR, DS, S, const SAL
 ) -> (NargProof, IR::TargetInstance, IR::TargetWitness)
 where
     DS: SpongeInfo,
-    IR: PreprocessingInteractiveReduction,
+    IR: PreprocessingInteractiveReductionProver,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[DS::U]>,
@@ -136,7 +137,7 @@ pub(crate) fn prepared_verify_reduction_with_sponge_and_salt<IR, DS, S, const SA
 ) -> VerificationResult<IR::TargetInstance>
 where
     DS: SpongeInfo,
-    IR: PreprocessingInteractiveReduction,
+    IR: PreprocessingInteractiveReductionVerifier,
     S: Encoding<[u8]>,
     IR::SourceInstance: Encoding<[u8]>,
     [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
