@@ -6,8 +6,7 @@
 //! The split of responsibilities is:
 //!
 //! - `ia-core` defines the abstract protocol vocabulary: channel traits,
-//!   interactive arguments/reductions, `NargProof`, and the
-//!   `NonInteractiveArgument` / `NonInteractiveReduction` traits.
+//!   interactive argument/reduction roles and their non-interactive counterparts.
 //! - `spongefish-dsfs` owns the concrete transformation from those interactive
 //!   protocols into non-interactive proofs using spongefish transcripts.
 //! - Protocol implementations should only call the channel API. They should not
@@ -16,16 +15,14 @@
 //!
 //! The semantic constructors are the byte-oriented convenience API:
 //!
-//! - [`plain_non_interactive_argument`] builds a DSFS wrapper for a plain
-//!   `InteractiveArgument` and immediately exposes `prove` / `verify`.
-//! - [`plain_non_interactive_reduction`] builds a DSFS wrapper for a plain
-//!   `InteractiveReduction` and immediately exposes `prove` / `verify`.
-//! - [`preprocessing_non_interactive_argument`] builds a stateless DSFS wrapper
-//!   for a `PreprocessingInteractiveArgument`; obtain `(pk, vk)` from the body's
-//!   `index(&ix)` and pass the relevant key to `prove` / `verify` (the wrapper
-//!   derives the committed index from whichever key it is handed).
-//! - [`preprocessing_non_interactive_reduction`] builds a stateless DSFS wrapper
-//!   for a `PreprocessingInteractiveReduction`; same keys-as-inputs shape.
+//! - [`plain_non_interactive_argument_prover`] and
+//!   [`plain_non_interactive_argument_verifier`] compile the two plain argument
+//!   roles independently.
+//! - [`plain_non_interactive_reduction_prover`] and
+//!   [`plain_non_interactive_reduction_verifier`] do the same for reductions.
+//! - The `preprocessing_non_interactive_*_prover` and
+//!   `preprocessing_non_interactive_*_verifier` constructors compile keyed roles
+//!   independently. An `ia_core::Indexer` remains outside DSFS.
 //! - `*_with_salt` constructor variants add an explicit prover-chosen salt
 //!   message before protocol execution.
 //! - The `duplex_sponge` argument selects a byte-oriented sponge such as [`Keccak`] or
@@ -35,10 +32,7 @@
 //! exposes the raw DSFS proof string expected by the verifier functions.
 //! Verification always checks EOF, so trailing proof bytes are rejected.
 //!
-//! Plain wrappers implement `NonInteractiveArgument` / `NonInteractiveReduction`.
-//! Preprocessing wrappers are stateless and implement
-//! `PreprocessingNonInteractiveArgument` / `PreprocessingNonInteractiveReduction`
-//! (keys are inputs to `prove` / `verify`, not stored on the wrapper).
+//! Every wrapper implements exactly one non-interactive executable role.
 //!
 //! Transcript invariants maintained here:
 //!
@@ -60,12 +54,21 @@ mod runners;
 pub use channel::TranscriptSponge;
 pub use channel::{SpongeProver, SpongeVerifier};
 pub use compile::{
-    plain_non_interactive_argument, plain_non_interactive_argument_with_salt,
-    plain_non_interactive_reduction, plain_non_interactive_reduction_with_salt,
-    preprocessing_non_interactive_argument, preprocessing_non_interactive_argument_with_salt,
-    preprocessing_non_interactive_reduction, preprocessing_non_interactive_reduction_with_salt,
-    ByteDuplexSponge, CombinedNarg, DsfsArgument, DsfsReduction, PreprocessedDsfsArgument,
-    PreprocessedDsfsReduction,
+    plain_non_interactive_argument_prover, plain_non_interactive_argument_prover_with_salt,
+    plain_non_interactive_argument_verifier, plain_non_interactive_argument_verifier_with_salt,
+    plain_non_interactive_reduction_prover, plain_non_interactive_reduction_prover_with_salt,
+    plain_non_interactive_reduction_verifier, plain_non_interactive_reduction_verifier_with_salt,
+    preprocessing_non_interactive_argument_prover,
+    preprocessing_non_interactive_argument_prover_with_salt,
+    preprocessing_non_interactive_argument_verifier,
+    preprocessing_non_interactive_argument_verifier_with_salt,
+    preprocessing_non_interactive_reduction_prover,
+    preprocessing_non_interactive_reduction_prover_with_salt,
+    preprocessing_non_interactive_reduction_verifier,
+    preprocessing_non_interactive_reduction_verifier_with_salt, ByteDuplexSponge,
+    DsfsArgumentProver, DsfsArgumentVerifier, DsfsReductionProver, DsfsReductionVerifier,
+    PreprocessedDsfsArgumentProver, PreprocessedDsfsArgumentVerifier,
+    PreprocessedDsfsReductionProver, PreprocessedDsfsReductionVerifier,
 };
 pub use narg_security::{
     reduction_security_for_source_bound, reduction_security_for_source_bound_with,
