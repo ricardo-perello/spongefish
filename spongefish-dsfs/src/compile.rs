@@ -18,11 +18,13 @@ use ia_core::{
 use rand::RngCore;
 use spongefish::{DomainSeparator, DuplexSpongeInterface};
 
-use crate::channel::{SpongeProver, SpongeVerifier};
-use crate::params::{Keccak, SpongeInfo};
-use crate::runners::{
-    prepared_prove_reduction_with_sponge_and_salt, prepared_prove_with_sponge_and_salt,
-    prepared_verify_reduction_with_sponge_and_salt, prepared_verify_with_sponge_and_salt,
+use crate::{
+    channel::{SpongeProver, SpongeVerifier},
+    params::{Keccak, SpongeInfo},
+    runners::{
+        prepared_prove_reduction_with_sponge_and_salt, prepared_prove_with_sponge_and_salt,
+        prepared_verify_reduction_with_sponge_and_salt, prepared_verify_with_sponge_and_salt,
+    },
 };
 
 /// Byte-oriented duplex sponge (`U = u8`).
@@ -32,9 +34,13 @@ impl<T: DuplexSpongeInterface<U = u8>> ByteDuplexSponge for T {}
 
 macro_rules! role_wrapper {
     ($name:ident, $field:ident) => {
+        /// A DSFS-compiled executable role.
+        ///
+        /// Construct this wrapper through the corresponding semantic constructor
+        /// rather than depending on its storage layout.
         pub struct $name<P, S, DS = Keccak, const SALT_LEN: usize = 0> {
-            pub $field: P,
-            pub duplex_sponge: DS,
+            $field: P,
+            duplex_sponge: DS,
             _session: PhantomData<S>,
         }
 
@@ -559,7 +565,7 @@ where
 }
 
 #[inline]
-pub(crate) fn prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
+fn prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     duplex_sponge: DS,
     session: &S,
@@ -589,7 +595,7 @@ where
     NargProof::from_bytes(spongefish_prover_ch.narg_string().to_vec())
 }
 
-pub(crate) fn verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
+fn verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     duplex_sponge: DS,
     session: &S,
@@ -657,7 +663,7 @@ where
     )
 }
 
-pub(crate) fn verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
+fn verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
     ir: &IR,
     duplex_sponge: DS,
     session: &S,
@@ -1016,5 +1022,73 @@ mod tests {
         assert!(verifier
             .verify(&key, &SESSION, &19, &NargProof::from_bytes(trailing))
             .is_err());
+    }
+
+    #[test]
+    fn salted_constructor_family_round_trips() {
+        let argument_prover = plain_non_interactive_argument_prover_with_salt::<_, [u8; 1], _, 8>(
+            ArgumentProver,
+            Keccak::default(),
+        );
+        let argument_verifier = plain_non_interactive_argument_verifier_with_salt::<_, [u8; 1], _, 8>(
+            ArgumentVerifier,
+            Keccak::default(),
+        );
+        let argument_proof = argument_prover.prove(&SESSION, &7, &7);
+        argument_verifier
+            .verify(&SESSION, &7, &argument_proof)
+            .unwrap();
+
+        let reduction_prover = plain_non_interactive_reduction_prover_with_salt::<_, [u8; 1], _, 8>(
+            ReductionProver,
+            Keccak::default(),
+        );
+        let reduction_verifier =
+            plain_non_interactive_reduction_verifier_with_salt::<_, [u8; 1], _, 8>(
+                ReductionVerifier,
+                Keccak::default(),
+            );
+        let (reduction_proof, target, _) = reduction_prover.prove(&SESSION, &11, &13);
+        assert_eq!(
+            reduction_verifier
+                .verify(&SESSION, &11, &reduction_proof)
+                .unwrap(),
+            target,
+        );
+
+        let key = Key(3);
+        let indexed_argument_prover =
+            preprocessing_non_interactive_argument_prover_with_salt::<_, [u8; 1], _, 8>(
+                IndexedArgumentProver,
+                Keccak::default(),
+            );
+        let indexed_argument_verifier =
+            preprocessing_non_interactive_argument_verifier_with_salt::<_, [u8; 1], _, 8>(
+                IndexedArgumentVerifier,
+                Keccak::default(),
+            );
+        let indexed_argument_proof = indexed_argument_prover.prove(&key, &SESSION, &17, &17);
+        indexed_argument_verifier
+            .verify(&key, &SESSION, &17, &indexed_argument_proof)
+            .unwrap();
+
+        let indexed_reduction_prover =
+            preprocessing_non_interactive_reduction_prover_with_salt::<_, [u8; 1], _, 8>(
+                IndexedReductionProver,
+                Keccak::default(),
+            );
+        let indexed_reduction_verifier =
+            preprocessing_non_interactive_reduction_verifier_with_salt::<_, [u8; 1], _, 8>(
+                IndexedReductionVerifier,
+                Keccak::default(),
+            );
+        let (indexed_reduction_proof, target, _) =
+            indexed_reduction_prover.prove(&key, &SESSION, &19, &23);
+        assert_eq!(
+            indexed_reduction_verifier
+                .verify(&key, &SESSION, &19, &indexed_reduction_proof)
+                .unwrap(),
+            target,
+        );
     }
 }

@@ -1226,7 +1226,7 @@ dependencies = [
 [[package]]
 name = "ia-core"
 version = "0.1.0"
-source = "git+https://github.com/ricardo-perello/argus.git?branch=codex%2Frole-first-architecture#f02d0fd310af82ee5cb21def6b7f70acf4a687c5"
+source = "git+https://github.com/ricardo-perello/argus.git?rev=534f58475f19097ea74cb4e1f1ab1c8c66701f32#534f58475f19097ea74cb4e1f1ab1c8c66701f32"
 dependencies = [
  "spongefish",
 ]

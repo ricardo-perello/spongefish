@@ -1,4 +1,9 @@
-//! Sponge-backed `ProverChannel` / `VerifierChannel` adapters.
+//! Low-level sponge-backed `ProverChannel` / `VerifierChannel` adapters.
+//!
+//! These adapters are public for transcript-format interoperability, notably
+//! sigma-protocol compatibility. Ordinary protocol implementations should use
+//! only the `ia-core` channel traits and should be compiled through the
+//! semantic constructors in this crate.
 
 extern crate alloc;
 
@@ -104,8 +109,11 @@ impl TranscriptSponge for StdHash {
 /// Generic over the duplex sponge `DS` used for the Fiat–Shamir transcript.
 /// Defaults to [`Keccak`] (Argus standard); use [`crate::params::StdHash`] for
 /// compatibility with spongefish `std_prover` / `std_verifier` (SHAKE128 XOF).
+///
+/// This is a low-level compatibility API. Protocol authors should accept a
+/// generic [`ProverChannel`] instead of naming this type.
 pub struct SpongeProver<DS: DuplexSpongeInterface = Keccak> {
-    pub state: ProverState<DS>,
+    pub(crate) state: ProverState<DS>,
 }
 
 impl<DS: DuplexSpongeInterface> SpongeProver<DS> {
@@ -146,8 +154,11 @@ impl<DS: DuplexSpongeInterface> ProverChannel for SpongeProver<DS> {
 }
 
 /// Wraps `spongefish::VerifierState` as an ia-core `VerifierChannel`.
+///
+/// This is a low-level compatibility API. Protocol authors should accept a
+/// generic [`VerifierChannel`] instead of naming this type.
 pub struct SpongeVerifier<'a, DS: DuplexSpongeInterface = Keccak> {
-    pub state: VerifierState<'a, DS>,
+    pub(crate) state: VerifierState<'a, DS>,
 }
 
 impl<'a, DS: DuplexSpongeInterface> SpongeVerifier<'a, DS> {

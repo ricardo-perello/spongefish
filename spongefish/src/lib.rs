@@ -217,12 +217,11 @@ mod domain_separator;
 pub use codecs::ByteArray;
 pub use codecs::{Codec, Decoding, Encoding};
 pub use deserialize::Deserialize;
-pub use domain_separator::protocol_label;
-pub use domain_separator::DomainSeparator;
 #[cfg(feature = "sha3")]
 pub use domain_separator::{derive_domain_digest, DomainSeparatorPrefix};
 #[doc(hidden)]
 pub use domain_separator::{protocol_id, session_id, session_id_from_str};
+pub use domain_separator::{protocol_label, DomainSeparator};
 pub use duplex_sponge::{DuplexSponge, DuplexSpongeInterface, Permutation, Unit};
 pub use error::{VerificationError, VerificationResult};
 pub use io::{NargDeserialize, NargSerialize};

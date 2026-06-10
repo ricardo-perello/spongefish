@@ -1,7 +1,9 @@
 //! Prover-message deserialization bridging NARG codecs.
 
-use crate::NargDeserialize;
-use crate::error::{VerificationError, VerificationResult};
+use crate::{
+    error::{VerificationError, VerificationResult},
+    NargDeserialize,
+};
 
 /// Reconstruct a typed value from a byte buffer.
 ///

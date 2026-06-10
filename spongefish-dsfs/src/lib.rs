@@ -51,8 +51,7 @@ mod narg_security;
 mod params;
 mod runners;
 
-pub use channel::TranscriptSponge;
-pub use channel::{SpongeProver, SpongeVerifier};
+pub use channel::{SpongeProver, SpongeVerifier, TranscriptSponge};
 pub use compile::{
     plain_non_interactive_argument_prover, plain_non_interactive_argument_prover_with_salt,
     plain_non_interactive_argument_verifier, plain_non_interactive_argument_verifier_with_salt,

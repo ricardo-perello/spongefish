@@ -236,9 +236,10 @@ impl NargSecurity {
 
 #[cfg(test)]
 mod tests {
+    use ia_core::{SecurityErrorBound, SecurityProfile};
+
     use super::NargSecurity;
     use crate::params::SpongeParams;
-    use ia_core::{SecurityErrorBound, SecurityProfile};
 
     /// Helper: build a profile with uniform per-round RBR error.
     fn profile_with_rbr(

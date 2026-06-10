@@ -83,7 +83,7 @@ sha2 = "0.11.0"
 sha3 = "=0.11.0"
 spin = { version = "0.12", default-features = false, features = ["rwlock"] }
 # Intra-workspace dependencies
-ia-core = { git = "https://github.com/ricardo-perello/argus.git", branch = "codex/role-first-architecture" }
+ia-core = { git = "https://github.com/ricardo-perello/argus.git", rev = "534f58475f19097ea74cb4e1f1ab1c8c66701f32" }
 spongefish = { version = "0.7.1", path = "spongefish" }
 spongefish-circuit = { version = "0.7.1", path = "circuit" }
 spongefish-derive = { version = "0.7.1", path = "derive" }

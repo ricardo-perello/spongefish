@@ -8,21 +8,21 @@
 
 extern crate alloc;
 
-use rand::RngCore;
-
 use ia_core::{
     CommittedIndexBytes, Encoding, IndexedInstanceRef, NargDeserialize, NargProof,
     PreprocessingInteractiveArgumentProver, PreprocessingInteractiveArgumentVerifier,
     PreprocessingInteractiveReductionProver, PreprocessingInteractiveReductionVerifier,
     VerificationError, VerificationResult,
 };
-
+use rand::RngCore;
 use spongefish::DomainSeparator;
 
-use crate::channel::{SpongeProver, SpongeVerifier};
-use crate::params::SpongeInfo;
+use crate::{
+    channel::{SpongeProver, SpongeVerifier},
+    params::SpongeInfo,
+};
 
-pub(crate) fn prepared_prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
+pub fn prepared_prove_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     pk: &IA::ProverKey,
     committed_index: &CommittedIndexBytes,
@@ -55,7 +55,7 @@ where
     NargProof::from_bytes(prover_ch.narg_string().to_vec())
 }
 
-pub(crate) fn prepared_verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
+pub fn prepared_verify_with_sponge_and_salt<IA, DS, S, const SALT_LEN: usize>(
     ia: &IA,
     vk: &IA::VerifierKey,
     committed_index: &CommittedIndexBytes,
@@ -89,7 +89,7 @@ where
     verifier_ch.state.check_eof().map_err(|_| VerificationError)
 }
 
-pub(crate) fn prepared_prove_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
+pub fn prepared_prove_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
     ir: &IR,
     pk: &IR::ProverKey,
     committed_index: &CommittedIndexBytes,
@@ -126,7 +126,7 @@ where
     )
 }
 
-pub(crate) fn prepared_verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
+pub fn prepared_verify_reduction_with_sponge_and_salt<IR, DS, S, const SALT_LEN: usize>(
     ir: &IR,
     vk: &IR::VerifierKey,
     committed_index: &CommittedIndexBytes,

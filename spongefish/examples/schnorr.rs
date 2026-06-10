@@ -5,7 +5,6 @@ use rand::rngs::OsRng;
 use spongefish::{
     Codec, Encoding, NargDeserialize, NargSerialize, ProverState, VerificationError,
     VerificationResult, VerifierState,
-
 };
 
 struct Schnorr;

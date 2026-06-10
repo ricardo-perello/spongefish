@@ -127,7 +127,7 @@ impl<I: ?Sized> DomainSeparator<WithoutInstance<I>> {
         }
     }
 
-    pub fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>> {
+    pub const fn instance(self, value: &I) -> DomainSeparator<WithInstance<'_, I>> {
         DomainSeparator {
             domsep: self.domsep,
             instance: WithInstance(value),
