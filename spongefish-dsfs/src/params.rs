@@ -27,11 +27,28 @@ pub const STD_SPONGE_PARAMS: SpongeParams = SpongeParams {
 
 pub type Keccak = spongefish::instantiations::Keccak;
 
-/// Spongefish’s default FS transcript hash: SHAKE128 in XOF duplex mode (`std_prover` / `std_verifier`).
+/// Spongefish’s SHAKE128 XOF sponge.
 ///
-/// Use as the duplex-sponge argument to [`crate::plain_non_interactive_argument_prover`] or
-/// [`crate::plain_non_interactive_reduction_prover`] when you need byte-compatibility with
-/// spongefish / σ-proofs `Nizk` transcript defaults.
+/// # Transcript-init caveat (not σ-proofs byte-compatible)
+///
+/// The DSFS compiler uses the duplex init path ([`spongefish::DomainSeparator::to_prover`])
+/// for **every** sponge, including `StdHash`: `absorb(domsep) ‖ absorb(instance)`.
+/// This is deliberately **not** byte-compatible with the legacy σ-proofs
+/// `std_prover` layout, which pads the 64-byte domain tag to a full SHAKE128 rate
+/// block first. That legacy path survives only in sigma-bridge's `TranscriptSponge`
+/// compatibility shim, pending convergence in spongefish (see ADR 0004). Use
+/// `StdHash` here for interop experiments, not for byte-equality with σ-proofs.
+///
+/// # Security caveat
+///
+/// `StdHash` is a SHAKE128 *XOF hash-bridge*, not the duplex-sponge construction
+/// analyzed in [[CO25]]. Only the permutation-based sponges (Argus's default
+/// [`Keccak`], Ascon) have a proven DSFS bound; the [`crate::NargSecurity`]
+/// numbers computed with [`STD_HASH_SPONGE_PARAMS`] for `StdHash` are therefore
+/// **heuristic**. Prefer [`Keccak`] when you need the analyzed setting; use
+/// `StdHash` for interoperability, not for its security accounting.
+///
+/// [CO25]: https://eprint.iacr.org/2025/536.pdf
 pub type StdHash = spongefish::StdHash;
 
 /// Compilation-layer identifier fed into [`spongefish::DomainSeparator::derive`] together with the
@@ -57,6 +74,12 @@ impl SpongeInfo for StdHash {
 /// rate from σ-proofs’ session-id helper (`RATE = 168`, SHAKE padding block) and treats capacity
 /// as **32 bytes (256 bits)** for conservative bound evaluation. Prefer [`STD_SPONGE_PARAMS`] for
 /// the default Keccak-`p[1600]` construction used in Argus.
+///
+/// **Heuristic.** The SHAKE128 hash-bridge is not the permutation-based duplex sponge analyzed in
+/// [[CO25]], so plugging these parameters into [`crate::NargSecurity`] yields a heuristic bound, not
+/// the proven one. See the security caveat on [`StdHash`].
+///
+/// [CO25]: https://eprint.iacr.org/2025/536.pdf
 pub const STD_HASH_SPONGE_PARAMS: SpongeParams = SpongeParams {
     alphabet_size: 256.0,
     capacity: 32,
