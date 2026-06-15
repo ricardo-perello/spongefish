@@ -3,11 +3,10 @@
 use alloc::vec;
 
 use ia_core::{
-    ArgumentCore, ArgumentProverCore, CommittedIndex, CommittedIndexBytes, NargProof,
-    InteractiveArgumentProver,
-    InteractiveArgumentVerifier, InteractiveReductionProver, InteractiveReductionVerifier,
-    NonInteractiveArgumentProver, NonInteractiveArgumentVerifier,
-    NonInteractiveReductionProver, NonInteractiveReductionVerifier,
+    ArgumentCore, ArgumentProverCore, CommittedIndex, CommittedIndexBytes,
+    InteractiveArgumentProver, InteractiveArgumentVerifier, InteractiveReductionProver,
+    InteractiveReductionVerifier, NargProof, NonInteractiveArgumentProver,
+    NonInteractiveArgumentVerifier, NonInteractiveReductionProver, NonInteractiveReductionVerifier,
     PreprocessingInteractiveArgumentProver, PreprocessingInteractiveArgumentVerifier,
     PreprocessingInteractiveReductionProver, PreprocessingInteractiveReductionVerifier,
     PreprocessingNonInteractiveArgumentProver, PreprocessingNonInteractiveArgumentVerifier,
@@ -259,14 +258,8 @@ impl PreprocessingInteractiveReductionVerifier for IndexedReductionVerifier {
 
 #[test]
 fn plain_argument_fixture_and_eof_rejection() {
-    let prover = argument_prover::<_, [u8; 1], _>(
-        ArgumentProver,
-        Keccak::default(),
-    );
-    let verifier = argument_verifier::<_, [u8; 1], _>(
-        ArgumentVerifier,
-        Keccak::default(),
-    );
+    let prover = argument_prover::<_, [u8; 1], _>(ArgumentProver, Keccak::default());
+    let verifier = argument_verifier::<_, [u8; 1], _>(ArgumentVerifier, Keccak::default());
     let proof = prover.prove(&SESSION, &7, &7);
     // First four bytes are the witness message `7u32` (absorbed before any
     // challenge, so unaffected by instance framing); the last four are the
@@ -283,14 +276,8 @@ fn plain_argument_fixture_and_eof_rejection() {
 
 #[test]
 fn plain_reduction_fixture_and_eof_rejection() {
-    let prover = reduction_prover::<_, [u8; 1], _>(
-        ReductionProver,
-        Keccak::default(),
-    );
-    let verifier = reduction_verifier::<_, [u8; 1], _>(
-        ReductionVerifier,
-        Keccak::default(),
-    );
+    let prover = reduction_prover::<_, [u8; 1], _>(ReductionProver, Keccak::default());
+    let verifier = reduction_verifier::<_, [u8; 1], _>(ReductionVerifier, Keccak::default());
     let (proof, target, _) = prover.prove(&SESSION, &11, &13);
     assert_eq!(proof.as_bytes(), &[13, 0, 0, 0]);
     assert_eq!(verifier.verify(&SESSION, &11, &proof).unwrap(), target);
@@ -303,10 +290,8 @@ fn plain_reduction_fixture_and_eof_rejection() {
 
 #[test]
 fn preprocessing_argument_fixture_and_eof_rejection() {
-    let prover = preprocessing_argument_prover::<_, [u8; 1], _>(
-        IndexedArgumentProver,
-        Keccak::default(),
-    );
+    let prover =
+        preprocessing_argument_prover::<_, [u8; 1], _>(IndexedArgumentProver, Keccak::default());
     let verifier = preprocessing_argument_verifier::<_, [u8; 1], _>(
         IndexedArgumentVerifier,
         Keccak::default(),
@@ -324,10 +309,8 @@ fn preprocessing_argument_fixture_and_eof_rejection() {
 
 #[test]
 fn preprocessing_reduction_fixture_and_eof_rejection() {
-    let prover = preprocessing_reduction_prover::<_, [u8; 1], _>(
-        IndexedReductionProver,
-        Keccak::default(),
-    );
+    let prover =
+        preprocessing_reduction_prover::<_, [u8; 1], _>(IndexedReductionProver, Keccak::default());
     let verifier = preprocessing_reduction_verifier::<_, [u8; 1], _>(
         IndexedReductionVerifier,
         Keccak::default(),
@@ -348,28 +331,19 @@ fn preprocessing_reduction_fixture_and_eof_rejection() {
 
 #[test]
 fn salted_constructor_family_round_trips() {
-    let argument_prover = argument_prover_with_salt::<_, [u8; 1], _, 8>(
-        ArgumentProver,
-        Keccak::default(),
-    );
-    let argument_verifier = argument_verifier_with_salt::<_, [u8; 1], _, 8>(
-        ArgumentVerifier,
-        Keccak::default(),
-    );
+    let argument_prover =
+        argument_prover_with_salt::<_, [u8; 1], _, 8>(ArgumentProver, Keccak::default());
+    let argument_verifier =
+        argument_verifier_with_salt::<_, [u8; 1], _, 8>(ArgumentVerifier, Keccak::default());
     let argument_proof = argument_prover.prove(&SESSION, &7, &7);
     argument_verifier
         .verify(&SESSION, &7, &argument_proof)
         .unwrap();
 
-    let reduction_prover = reduction_prover_with_salt::<_, [u8; 1], _, 8>(
-        ReductionProver,
-        Keccak::default(),
-    );
+    let reduction_prover =
+        reduction_prover_with_salt::<_, [u8; 1], _, 8>(ReductionProver, Keccak::default());
     let reduction_verifier =
-        reduction_verifier_with_salt::<_, [u8; 1], _, 8>(
-            ReductionVerifier,
-            Keccak::default(),
-        );
+        reduction_verifier_with_salt::<_, [u8; 1], _, 8>(ReductionVerifier, Keccak::default());
     let (reduction_proof, target, _) = reduction_prover.prove(&SESSION, &11, &13);
     assert_eq!(
         reduction_verifier
@@ -379,31 +353,27 @@ fn salted_constructor_family_round_trips() {
     );
 
     let key = Key(3);
-    let indexed_argument_prover =
-        preprocessing_argument_prover_with_salt::<_, [u8; 1], _, 8>(
-            IndexedArgumentProver,
-            Keccak::default(),
-        );
-    let indexed_argument_verifier =
-        preprocessing_argument_verifier_with_salt::<_, [u8; 1], _, 8>(
-            IndexedArgumentVerifier,
-            Keccak::default(),
-        );
+    let indexed_argument_prover = preprocessing_argument_prover_with_salt::<_, [u8; 1], _, 8>(
+        IndexedArgumentProver,
+        Keccak::default(),
+    );
+    let indexed_argument_verifier = preprocessing_argument_verifier_with_salt::<_, [u8; 1], _, 8>(
+        IndexedArgumentVerifier,
+        Keccak::default(),
+    );
     let indexed_argument_proof = indexed_argument_prover.prove(&key, &SESSION, &17, &17);
     indexed_argument_verifier
         .verify(&key, &SESSION, &17, &indexed_argument_proof)
         .unwrap();
 
-    let indexed_reduction_prover =
-        preprocessing_reduction_prover_with_salt::<_, [u8; 1], _, 8>(
-            IndexedReductionProver,
-            Keccak::default(),
-        );
-    let indexed_reduction_verifier =
-        preprocessing_reduction_verifier_with_salt::<_, [u8; 1], _, 8>(
-            IndexedReductionVerifier,
-            Keccak::default(),
-        );
+    let indexed_reduction_prover = preprocessing_reduction_prover_with_salt::<_, [u8; 1], _, 8>(
+        IndexedReductionProver,
+        Keccak::default(),
+    );
+    let indexed_reduction_verifier = preprocessing_reduction_verifier_with_salt::<_, [u8; 1], _, 8>(
+        IndexedReductionVerifier,
+        Keccak::default(),
+    );
     let (indexed_reduction_proof, target, _) =
         indexed_reduction_prover.prove(&key, &SESSION, &19, &23);
     assert_eq!(

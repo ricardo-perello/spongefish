@@ -136,12 +136,7 @@ pub const fn preprocessing_argument_prover<P, S, DS>(
 
 /// Compile a salted preprocessing argument prover.
 #[must_use]
-pub const fn preprocessing_argument_prover_with_salt<
-    P,
-    S,
-    DS,
-    const SALT_LEN: usize,
->(
+pub const fn preprocessing_argument_prover_with_salt<P, S, DS, const SALT_LEN: usize>(
     prover: P,
     duplex_sponge: DS,
 ) -> PreprocessingArgumentProver<P, S, DS, SALT_LEN> {
@@ -159,12 +154,7 @@ pub const fn preprocessing_argument_verifier<V, S, DS>(
 
 /// Compile a salted preprocessing argument verifier.
 #[must_use]
-pub const fn preprocessing_argument_verifier_with_salt<
-    V,
-    S,
-    DS,
-    const SALT_LEN: usize,
->(
+pub const fn preprocessing_argument_verifier_with_salt<V, S, DS, const SALT_LEN: usize>(
     verifier: V,
     duplex_sponge: DS,
 ) -> PreprocessingArgumentVerifier<V, S, DS, SALT_LEN> {

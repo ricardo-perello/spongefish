@@ -60,8 +60,7 @@ where
     type TargetInstance = P::TargetInstance;
 }
 
-impl<P, S, DS, const SALT_LEN: usize> ReductionProverCore
-    for ReductionProver<P, S, DS, SALT_LEN>
+impl<P, S, DS, const SALT_LEN: usize> ReductionProverCore for ReductionProver<P, S, DS, SALT_LEN>
 where
     P: ReductionProverCore,
 {
@@ -140,12 +139,7 @@ pub const fn preprocessing_reduction_prover<P, S, DS>(
 
 /// Compile a salted preprocessing reduction prover.
 #[must_use]
-pub const fn preprocessing_reduction_prover_with_salt<
-    P,
-    S,
-    DS,
-    const SALT_LEN: usize,
->(
+pub const fn preprocessing_reduction_prover_with_salt<P, S, DS, const SALT_LEN: usize>(
     prover: P,
     duplex_sponge: DS,
 ) -> PreprocessingReductionProver<P, S, DS, SALT_LEN> {
@@ -163,12 +157,7 @@ pub const fn preprocessing_reduction_verifier<V, S, DS>(
 
 /// Compile a salted preprocessing reduction verifier.
 #[must_use]
-pub const fn preprocessing_reduction_verifier_with_salt<
-    V,
-    S,
-    DS,
-    const SALT_LEN: usize,
->(
+pub const fn preprocessing_reduction_verifier_with_salt<V, S, DS, const SALT_LEN: usize>(
     verifier: V,
     duplex_sponge: DS,
 ) -> PreprocessingReductionVerifier<V, S, DS, SALT_LEN> {

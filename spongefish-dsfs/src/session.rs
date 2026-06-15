@@ -31,9 +31,12 @@ where
     [u8; SALT_LEN]: Encoding<[DS::U]>,
 {
     let session_bytes = session.encode();
-    let domsep =
-        DomainSeparator::derive(protocol_id.as_ref(), DS::SPONGE_INFO, session_bytes.as_ref())
-            .instance(public_input);
+    let domsep = DomainSeparator::derive(
+        protocol_id.as_ref(),
+        DS::SPONGE_INFO,
+        session_bytes.as_ref(),
+    )
+    .instance(public_input);
 
     let mut ch = SpongeProver::new(domsep.to_prover(duplex_sponge));
     let mut salt = [0u8; SALT_LEN];
@@ -62,9 +65,12 @@ where
     [u8; SALT_LEN]: Encoding<[DS::U]> + NargDeserialize,
 {
     let session_bytes = session.encode();
-    let domsep =
-        DomainSeparator::derive(protocol_id.as_ref(), DS::SPONGE_INFO, session_bytes.as_ref())
-            .instance(public_input);
+    let domsep = DomainSeparator::derive(
+        protocol_id.as_ref(),
+        DS::SPONGE_INFO,
+        session_bytes.as_ref(),
+    )
+    .instance(public_input);
 
     let mut ch = SpongeVerifier::new(domsep.to_verifier(duplex_sponge, proof));
     let _salt: [u8; SALT_LEN] = ch.state.prover_message().map_err(|_| VerificationError)?;
